@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Smart Bin">
 <meta name="color-scheme" content="dark">
 <title>Smart Bin</title>
+<link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://api.groq.com" crossorigin>
 <link id="manifestLink" rel="manifest">
 <link id="iconLink" rel="icon">
@@ -199,13 +200,15 @@ const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is stil
 
 // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
 const CONFIG = {
-  photoModel: 'qwen/qwen3.8-27b',   // Groq vision model used for every photo
+  geminiModel: 'gemini-3.8-flash',  // tried first for every photo
+  photoModel: 'qwen/qwen3.8-27b',   // Groq backup, used when Gemini is out of free quota or fails
   liveModel: 'gemini-3.8-live',     // Live mode only (off), uses the Gemini key
   liveMode: false,
   sensitivity: 16,                // item detection threshold; lower is more sensitive
   mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
   // Built in so every device works without setup. This file is public, so anyone can
   // read these. Split only to avoid automatic leak scanners, not to hide them.
+  geminiKey: '',   // empty = Groq only
   groqKey: ['gsk_', 'KHWd6JHrX1I4pPux', 'qnkyWGdyb3FYKz5c', '69enHmI3Gg0QGrzsXxys'].join(''),
   topicPrefix: 'smartbin-b0p1r0mw5c', // must match SECRET_TOPIC_PREFIX in arduino_secrets.h
 };
@@ -260,6 +263,7 @@ for (const name of Object.keys(DEFAULTS)) {
     settings[name] = DEFAULTS[name];
   }
 }
+if (!settings.apiKey) settings.apiKey = settings.geminiKey; // Live mode uses the built-in Gemini key
 function saveSetting(name, value) {
   settings[name] = value;
   try {
@@ -731,7 +735,93 @@ function parseCategory(text) {
   return unique.length === 1 ? unique[0] : null;
 }
 
-// ---------------- Photo mode (Groq) ----------------
+// ---------------- Photo mode: Gemini first, Groq as backup ----------------
+const PHOTO_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    item: { type: 'STRING' },
+    action: { type: 'STRING', enum: ['SORT', 'PREPARE'] },
+    category: { type: 'STRING', enum: ['BIO', 'METAL', 'ENERGY', 'MIX', 'EMPTY'] },
+    instruction: { type: 'STRING' },
+  },
+  required: ['item', 'action', 'category', 'instruction'],
+  propertyOrdering: ['item', 'action', 'category', 'instruction'],
+};
+let geminiThinking = 'low';   // dropped if the model rejects it
+let geminiPausedUntil = 0;    // while Gemini is out of quota or failing, photos go to Groq
+
+async function classifyPhoto() {
+  const image = grabJpeg(768, 0.85);
+  if (settings.geminiKey && Date.now() >= geminiPausedUntil) {
+    try {
+      setActivity('Asking Gemini…');
+      return { text: await classifyGemini(image), via: 'gemini' };
+    } catch (e) {
+      // Out of free quota: wait as long as Google says. Other errors: try Gemini again later.
+      let pauseS = e.status === 429 ? (e.retrySecs || 60) : (e.status === 400 || e.status === 403 || e.status === 404 ? 600 : 30);
+      pauseS = Math.min(pauseS, 3600);
+      geminiPausedUntil = Date.now() + pauseS * 1000;
+      log((e.status === 429 ? 'Gemini free limit reached.' : 'Gemini failed: ' + e.message + '.') +
+        ' Using Groq for the next ' + (pauseS >= 120 ? Math.round(pauseS / 60) + ' min.' : pauseS + ' s.'));
+    }
+  }
+  return { text: await classifyGroq(image), via: 'groq' };
+}
+
+async function classifyGemini(image) {
+  try {
+    return await requestGemini(image);
+  } catch (e) {
+    if (!geminiThinking || !/thinking/i.test(e.message)) throw e;
+    geminiThinking = null;
+    log('Gemini does not accept the thinking setting, sending without it.');
+    return requestGemini(image);
+  }
+}
+
+async function requestGemini(image) {
+  const model = settings.geminiModel.trim().replace(/^models\//, '');
+  const body = {
+    contents: [{
+      parts: [
+        { text: PHOTO_PROMPT },
+        { inline_data: { mime_type: 'image/jpeg', data: image } },
+      ],
+    }],
+    generationConfig: { responseMimeType: 'application/json', responseSchema: PHOTO_SCHEMA },
+  };
+  if (geminiThinking) body.generationConfig.thinkingConfig = { thinkingLevel: geminiThinking };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.geminiKey },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      const err = new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
+      err.status = res.status;
+      // Google says how long to wait in a RetryInfo detail, e.g. "32s".
+      const info = json && json.error && (json.error.details || []).find(d => d.retryDelay);
+      if (info) err.retrySecs = Math.ceil(parseFloat(info.retryDelay)) || 0;
+      throw err;
+    }
+    const parts = (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
+    const text = parts.filter(p => !p.thought).map(p => p.text || '').join('').trim();
+    if (!text) throw new Error('empty answer');
+    return text;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('timed out');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------------- Photo mode backup (Groq) ----------------
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Optional request settings. If Groq rejects one for this model, it is dropped and remembered.
@@ -782,9 +872,8 @@ async function waitWithCountdown(ms, label) {
   }
 }
 
-async function classifyPhoto() {
+async function classifyGroq(image) {
   if (!settings.groqKey) throw new Error('No Groq API key in CONFIG.');
-  const image = grabJpeg(768, 0.85);
 
   // Not enough of this minute's budget left: wait for it to refill first.
   const refillMs = groqWaitMs();
@@ -795,7 +884,7 @@ async function classifyPhoto() {
 
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
-      setActivity('Classifying photo…');
+      setActivity('Asking Groq…');
       return await requestGroq(image);
     } catch (e) {
       if (e.retryAfter && attempt < 3 && e.retryAfter <= 60) {
@@ -855,6 +944,11 @@ async function requestGroq(image) {
 // Opens the connection to Groq ahead of time so the first answer does not
 // also pay for the connection setup.
 function warmUpAi() {
+  if (settings.geminiKey) {
+    fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(settings.geminiModel), {
+      headers: { 'x-goog-api-key': settings.geminiKey },
+    }).catch(() => {});
+  }
   if (!settings.groqKey) return;
   fetch('https://api.groq.com/openai/v1/models', {
     headers: { 'Authorization': 'Bearer ' + settings.groqKey },
@@ -872,8 +966,7 @@ async function classify() {
       log('Live session not ready, using photo mode.');
     }
   }
-  setActivity('Classifying photo…');
-  return { text: await classifyPhoto(), via: 'photo' };
+  return classifyPhoto();
 }
 
 async function processItem() {

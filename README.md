@@ -81,7 +81,8 @@ Place an item. When it has been still for about a second, the app classifies it,
 Models, Live mode, sensitivity and the broker host are fixed in the `CONFIG` block near the top of the `<script>` in `web/index.html`. Nobody can change them from the page. To change one, edit `CONFIG` and push to GitHub.
 
 - **Sensitivity:** the line under the result shows `change X / threshold`. Set `sensitivity` a little above the `change` value you see with an empty platform.
-- **Photo model:** `photoModel` is the Groq vision model. On the free plan, Groq allows roughly 3–4 items a minute; when the limit is hit, the app waits and tries again.
+- **AI models:** every photo goes to `geminiModel` (Gemini, free tier) first. When Gemini is out of free quota or fails, the app switches to `photoModel` on Groq by itself and tries Gemini again once Google's wait time is over. With `geminiKey` empty, only Groq is used.
+- **Groq limit:** `photoModel` is the Groq vision model. On the free plan, Groq allows roughly 3–4 items a minute; when the limit is hit, the app waits and tries again.
 - **Live mode:** needs a Gemini API key on the setup page. Set `liveMode: true` to use a streaming Gemini Live session instead of single photos. If it gives no answer within 8 seconds, or the socket is closed, the app falls back to photo mode. Check that `liveModel` is one your key can use.
 
 ## Test plan
