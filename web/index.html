@@ -68,6 +68,8 @@
   .result[data-cat="METAL"] { color: var(--metal); }
   .result[data-cat="UNSURE"] { color: var(--warn); }
   .result[data-cat="ERROR"] { color: var(--bad); }
+  .result[data-cat="PREPARE"] { color: var(--warn); }
+  #itemName.prepare { color: var(--warn); font-size: 18px; font-weight: 700; white-space: normal; }
   .state { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -181,7 +183,21 @@ const PROMPT = [
   'Tips: food inside packaging counts as the packaging. A coated paper cup or carton is ENERGY. Foil-lined chip bags are ENERGY. A plastic bottle with a metal cap is ENERGY. Paper with food on it is BIO only if it is a napkin, towel or tissue; otherwise ENERGY.',
   'If there is no item on the platform, the category is EMPTY.',
 ].join('\n');
-const PHOTO_PROMPT = PROMPT + '\nReply as JSON with "item" (a short name of the item and its material, for example "aluminium drink can") and "category" (BIO, METAL, ENERGY, MIX or EMPTY).';
+
+// Photo mode also checks whether the item must be emptied or taken apart first.
+const PHOTO_PROMPT = PROMPT + '\n' + [
+  'Think it through like a careful person standing at the bin: what is it, what is it made of, is there anything inside it, and does it have parts made of different materials?',
+  'Set "action" to PREPARE instead of SORT when the item cannot go in one compartment as it is:',
+  '- a bottle, can, jar, carton, cup or tub that still holds a noticeable amount of liquid, sauce, food or other contents (for example a water bottle with water in it, a ketchup bottle with ketchup in it, a half-full yogurt tub). A little leftover residue is fine; it does not need washing.',
+  '- an item with parts of different materials that are easy to separate, such as a glass jar with its metal lid on, or a takeaway box or pizza box with food still in it. Small parts that are hard to remove, like a staple in a tea bag, do not count.',
+  'For PREPARE, "category" is where the empty or main part should go afterwards, and "instruction" tells the person in one short sentence what to do, for example "Pour out the water, then put the bottle back."',
+  'For SORT, "instruction" is an empty string.',
+  'Reply as JSON with "item" (a short name of the item, its material and what is inside it, for example "plastic ketchup bottle, half full of ketchup"), "action" (SORT or PREPARE), "category" (BIO, METAL, ENERGY, MIX or EMPTY) and "instruction".',
+].join('\n');
+
+// Shown when an item must be emptied or taken apart before it can be sorted.
+const PREPARE_TITLE = 'EMPTY ME';
+const PREPARE_MESSAGE = 'Get the shit out of me!';
 const LIVE_PROMPT = PROMPT + ' You are watching a live camera above the platform. Stay silent. Only when you are told an item has been placed, call the sort_item function once with the category. Never answer in speech.';
 const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
 
@@ -265,6 +281,7 @@ function setPill(el, text, state) {
   el.dataset.state = state || '';
 }
 function showItemName(text) {
+  $('itemName').classList.remove('prepare');
   $('itemName').textContent = text || '';
 }
 function showResult(word) {
@@ -718,7 +735,7 @@ function parseCategory(text) {
 
 // Thinking makes answers slow, so ask for the lowest level the model accepts.
 // If a level is rejected, step to the next one and remember it.
-const THINKING_LEVELS = ['low', null];
+const THINKING_LEVELS = ['medium', 'low', null];
 let thinkingIndex = 0;
 
 async function classifyPhoto() {
@@ -762,10 +779,12 @@ async function requestPhoto(image, thinkingLevel) {
       type: 'OBJECT',
       properties: {
         item: { type: 'STRING' },
+        action: { type: 'STRING', enum: ['SORT', 'PREPARE'] },
         category: { type: 'STRING', enum: ['BIO', 'METAL', 'ENERGY', 'MIX', 'EMPTY'] },
+        instruction: { type: 'STRING' },
       },
-      required: ['item', 'category'],
-      propertyOrdering: ['item', 'category'],
+      required: ['item', 'action', 'category', 'instruction'],
+      propertyOrdering: ['item', 'action', 'category', 'instruction'],
     },
   };
   if (thinkingLevel) body.generationConfig.thinkingConfig = { thinkingLevel };
@@ -818,17 +837,25 @@ async function processItem() {
     const t0 = performance.now();
     const { text, via } = await classify();
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
-    let cat = null, item = '';
+    let cat = null, item = '', prepare = false, instruction = '';
     try {
       const json = JSON.parse(text);
       item = String(json.item || '');
       cat = parseCategory(json.category);
+      prepare = json.action === 'PREPARE' && cat !== 'EMPTY';
+      instruction = String(json.instruction || '').trim();
     } catch {
       cat = parseCategory(text); // live mode answers with the category word only
     }
     showItemName(item);
     log('Answer (' + via + ', ' + secs + ' s): ' + (item ? item + ' → ' : '"' + text + '" → ') + (cat || 'UNSURE'));
-    if (cat === 'EMPTY') {
+    if (prepare) {
+      showResult(PREPARE_TITLE);
+      $('result').dataset.cat = 'PREPARE';
+      showItemName(PREPARE_MESSAGE + ' ' + (instruction || 'Empty it or take it apart, then put it back.'));
+      $('itemName').classList.add('prepare');
+      log('Needs preparing first: ' + (instruction || item) + ' Afterwards: ' + cat + '.');
+    } else if (cat === 'EMPTY') {
       showResult('');
       if (cameraReady()) saveEmptyFrame(false); // the scene is empty, so use it as the new empty frame
       log('Model sees no item. If the scene changed, tap Set empty platform.');
