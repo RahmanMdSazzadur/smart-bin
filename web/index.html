@@ -741,17 +741,66 @@ const groqOptions = {
   temperature: 0.2,
 };
 
+// Groq's free plan allows a fixed number of tokens per minute (about 3 photos).
+// Browsers cannot read Groq's rate-limit headers, so the app keeps its own count
+// of tokens used in the last minute and waits *before* sending when it would go over.
+const GROQ_TOKENS_PER_MIN = 8000;
+const groqUsage = [];          // { at, tokens } for each answer in the last minute
+let groqPerPhoto = 2200;       // updated from real answers
+
+function recordGroqUsage(usage) {
+  if (!usage || !usage.total_tokens) return;
+  groqPerPhoto = usage.total_tokens;
+  groqUsage.push({ at: Date.now(), tokens: usage.total_tokens });
+}
+// How long until another photo fits in the per-minute budget (0 = now).
+function groqWaitMs() {
+  const now = Date.now();
+  while (groqUsage.length && now - groqUsage[0].at > 60000) groqUsage.shift();
+  let used = groqUsage.reduce((sum, u) => sum + u.tokens, 0);
+  for (const u of groqUsage) {
+    if (used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95) break;
+    used -= u.tokens;
+    if (used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95) return u.at + 60000 - now;
+  }
+  return used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95 ? 0 : 60000;
+}
+// Groq's 429 message says e.g. "Please try again in 12.345s" or "in 1m2.5s".
+function retrySecondsFrom(message) {
+  const m = String(message).match(/try again in ((?:[\d.]+(?:ms|h|m|s))+)/i);
+  if (!m) return 10;
+  let secs = 0;
+  for (const [, n, unit] of m[1].matchAll(/([\d.]+)(ms|h|m|s)/g)) secs += Number(n) * { ms: 0.001, s: 1, m: 60, h: 3600 }[unit];
+  return Math.max(1, Math.ceil(secs));
+}
+
+async function waitWithCountdown(ms, label) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    setActivity(label + ' ' + Math.ceil((end - Date.now()) / 1000) + ' s…');
+    await sleep(Math.min(1000, end - Date.now()));
+  }
+}
+
 async function classifyPhoto() {
-  if (!settings.groqKey) throw new Error('This phone is not set up yet (no Groq API key).');
+  if (!settings.groqKey) throw new Error('No Groq API key in CONFIG.');
   const image = grabJpeg(768, 0.85);
-  for (let attempt = 0; attempt < 5; attempt++) {
+
+  // Not enough of this minute's budget left: wait for it to refill first.
+  const refillMs = groqWaitMs();
+  if (refillMs > 0) {
+    log('Free plan limit: waiting ' + Math.ceil(refillMs / 1000) + ' s before asking.');
+    await waitWithCountdown(refillMs + 300, 'Free plan limit, answer in');
+  }
+
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
+      setActivity('Classifying photo…');
       return await requestGroq(image);
     } catch (e) {
-      if (e.retryAfter && attempt === 0 && e.retryAfter <= 20) {
-        log('Groq free limit reached, waiting ' + e.retryAfter + ' s…');
-        setActivity('Free limit reached, waiting ' + e.retryAfter + ' s…');
-        await sleep(e.retryAfter * 1000);
+      if (e.retryAfter && attempt < 3 && e.retryAfter <= 60) {
+        log('Groq free limit reached, waiting ' + e.retryAfter + ' s.');
+        await waitWithCountdown(e.retryAfter * 1000, 'Free plan limit, answer in');
         continue;
       }
       const rejected = Object.keys(groqOptions).find(k => e.message.includes(k));
@@ -785,9 +834,10 @@ async function requestGroq(image) {
       signal: ctrl.signal,
     });
     const json = await res.json().catch(() => null);
+    if (res.ok) recordGroqUsage(json && json.usage);
     if (!res.ok) {
       const err = new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
-      if (res.status === 429) err.retryAfter = Math.ceil(Number(res.headers.get('retry-after')) || 10);
+      if (res.status === 429) err.retryAfter = retrySecondsFrom(err.message);
       throw err;
     }
     let text = (json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || '';
