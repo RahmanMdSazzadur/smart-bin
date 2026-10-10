@@ -60,7 +60,7 @@
   .viewer { position: relative; aspect-ratio: 4 / 3; background: #000; border-radius: 12px; overflow: hidden; }
   .viewer video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
-  .result { font-size: 52px; font-weight: 800; text-align: center; letter-spacing: .04em; margin: 12px 0 2px; min-height: 64px; }
+  .result { font-size: 52px; font-weight: 800; text-align: center; letter-spacing: .04em; margin: 12px 0 2px; min-height: 64px; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
   .result[data-cat="ENERGY"] { color: var(--energy); }
   .result[data-cat="MIX"] { color: var(--mix); }
   .result[data-cat="BIO"] { color: var(--bio); }
@@ -129,39 +129,25 @@
   </div>
 </section>
 
-<details id="settingsCard" class="card">
-  <summary>Settings</summary>
+<!-- Hidden setup page: only shown when the address ends with #setup -->
+<section id="setupCard" class="card" hidden>
+  <h2>Setup (this phone only)</h2>
   <label for="apiKey">Gemini API key
     <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
   </label>
-  <div class="hint">Stored only in this browser.</div>
-  <label for="photoModel">Photo model
-    <input id="photoModel" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
-  </label>
-  <label for="liveModel">Live model
-    <input id="liveModel" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
-  </label>
-  <label class="check"><input id="liveMode" type="checkbox"> Live mode</label>
-  <label for="sensitivity">Detection sensitivity: <strong id="sensValue"></strong>
-    <input id="sensitivity" type="range" min="4" max="60" step="1">
-  </label>
-  <div class="hint">Lower is more sensitive. Compare with the "change" number shown under the result.</div>
-  <label for="mqttHost">Broker host
-    <input id="mqttHost" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="broker.hivemq.com">
-  </label>
-  <div class="hint">A host name connects to wss://host:8884/mqtt. You can also enter a full wss:// address.</div>
   <label for="topicPrefix">Secret topic name
     <input id="topicPrefix" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
   </label>
-  <div class="hint">Put exactly the same name in arduino_secrets.h. Anyone who knows it can control the bin.</div>
+  <div class="hint">Must match SECRET_TOPIC_PREFIX in arduino_secrets.h.</div>
   <label for="mqttUser">Broker user (optional)
     <input id="mqttUser" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
   </label>
   <label for="mqttPass">Broker password (optional)
     <input id="mqttPass" type="password" autocomplete="off" spellcheck="false">
   </label>
-  <div class="hint">Leave both empty for a public broker.</div>
-</details>
+  <div class="hint">Saved only on this phone. Everything else is fixed in CONFIG in index.html.</div>
+  <button id="setupDone" class="btn primary" style="margin-top:14px">Done</button>
+</section>
 
 <section class="card">
   <h2>Log</h2>
@@ -185,13 +171,19 @@ const PROMPT = 'The photo shows one item of household waste lying on a platform.
 const LIVE_PROMPT = PROMPT + ' You are watching a live camera above the platform. Stay silent. Only when you are told an item has been placed, call the sort_item function once with the category. Never answer in speech.';
 const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
 
-const DEFAULTS = {
-  apiKey: '',
+// Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
+const CONFIG = {
   photoModel: 'gemini-3.8-flash',
   liveModel: 'gemini-3.8-live',
   liveMode: false,
-  sensitivity: 16,
-  mqttHost: 'broker.hivemq.com',
+  sensitivity: 16,                // item detection threshold; lower is more sensitive
+  mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
+};
+
+// Secrets, saved per phone on the hidden setup page (page address + #setup).
+// They are never written in this file because the file is public.
+const DEFAULTS = {
+  apiKey: '',
   topicPrefix: '',
   mqttUser: '',
   mqttPass: '',
@@ -230,7 +222,7 @@ window.addEventListener('error', e => log('Error: ' + e.message));
 window.addEventListener('unhandledrejection', e => log('Error: ' + (e.reason && e.reason.message || e.reason)));
 
 // ---------------- Settings ----------------
-const settings = {};
+const settings = { ...CONFIG };
 for (const name of Object.keys(DEFAULTS)) {
   try {
     const raw = localStorage.getItem('smartbin.' + name);
@@ -338,8 +330,7 @@ function binConnect() {
   clearTimeout(bin.reconnectTimer);
   if (bin.ws || !bin.wanted) return;
   if (!settings.mqttHost || !settings.topicPrefix) {
-    log('Enter the broker host and secret topic name in Settings.');
-    $('settingsCard').open = true;
+    log('This phone is not set up yet (no secret topic name).');
     bin.wanted = false;
     updateBinUi();
     return;
@@ -696,8 +687,8 @@ function parseCategory(text) {
 }
 
 async function classifyPhoto() {
-  if (!settings.apiKey) throw new Error('No API key. Enter it in Settings.');
-  const model = (settings.photoModel || DEFAULTS.photoModel).trim().replace(/^models\//, '');
+  if (!settings.apiKey) throw new Error('This phone is not set up yet (no API key).');
+  const model = (settings.photoModel || CONFIG.photoModel).trim().replace(/^models\//, '');
   const body = {
     contents: [{
       parts: [
@@ -810,7 +801,7 @@ function updateLivePill() {
 }
 
 function liveSetupMessage() {
-  const model = (settings.liveModel || DEFAULTS.liveModel).trim().replace(/^models\//, '');
+  const model = (settings.liveModel || CONFIG.liveModel).trim().replace(/^models\//, '');
   return {
     setup: {
       model: 'models/' + model,
@@ -1010,65 +1001,56 @@ document.querySelectorAll('[data-raw]').forEach(b => {
   b.addEventListener('click', () => manualRaw(b.dataset.raw));
 });
 
-const apiKeyInput = $('apiKey');
-const photoModelInput = $('photoModel');
-const liveModelInput = $('liveModel');
-const liveModeInput = $('liveMode');
-const sensInput = $('sensitivity');
-
-apiKeyInput.value = settings.apiKey;
-photoModelInput.value = settings.photoModel;
-liveModelInput.value = settings.liveModel;
-liveModeInput.checked = !!settings.liveMode;
-sensInput.value = settings.sensitivity;
-$('sensValue').textContent = settings.sensitivity;
-if (!settings.apiKey) $('settingsCard').open = true;
-
 function restartLive() {
   if (!settings.liveMode) return;
   liveStop();
   liveStart();
 }
-apiKeyInput.addEventListener('change', () => {
-  saveSetting('apiKey', apiKeyInput.value.trim());
-  log(settings.apiKey ? 'API key saved.' : 'API key cleared.');
-  restartLive();
-});
-photoModelInput.addEventListener('change', () => {
-  saveSetting('photoModel', photoModelInput.value.trim() || DEFAULTS.photoModel);
-  photoModelInput.value = settings.photoModel;
-  log('Photo model: ' + settings.photoModel);
-});
-liveModelInput.addEventListener('change', () => {
-  saveSetting('liveModel', liveModelInput.value.trim() || DEFAULTS.liveModel);
-  liveModelInput.value = settings.liveModel;
-  log('Live model: ' + settings.liveModel);
-  restartLive();
-});
-liveModeInput.addEventListener('change', () => {
-  saveSetting('liveMode', liveModeInput.checked);
-  log('Live mode ' + (settings.liveMode ? 'on.' : 'off.'));
-  if (settings.liveMode) liveStart();
-  else liveStop();
-});
+
 // First run: make a random secret topic name to copy into arduino_secrets.h.
 if (!settings.topicPrefix) {
   const random = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => (b % 36).toString(36)).join('');
   saveSetting('topicPrefix', 'smartbin-' + random);
 }
-for (const name of ['mqttHost', 'topicPrefix', 'mqttUser', 'mqttPass']) {
+for (const name of ['apiKey', 'topicPrefix', 'mqttUser', 'mqttPass']) {
   const input = $(name);
   input.value = settings[name];
   input.addEventListener('change', () => {
     saveSetting(name, input.value.trim());
-    log('Broker settings saved.');
-    if (bin.ws) bin.ws.close(); // reconnects with the new settings
+    log('Setup saved.');
+    if (name === 'apiKey') restartLive();
+    else if (bin.ws) bin.ws.close(); // reconnects with the new settings
   });
 }
-sensInput.addEventListener('input', () => {
-  saveSetting('sensitivity', Number(sensInput.value));
-  $('sensValue').textContent = settings.sensitivity;
+
+// Setup opens with #setup in the address, or with 5 quick taps on the big result text
+// (a Home Screen app on iPhone has no address bar).
+let setupOpen = location.hash === '#setup';
+function showSetup() {
+  $('setupCard').hidden = !setupOpen;
+  if (setupOpen) $('setupCard').scrollIntoView({ behavior: 'smooth' });
+}
+window.addEventListener('hashchange', () => {
+  setupOpen = location.hash === '#setup';
+  showSetup();
 });
+let setupTaps = [];
+resultEl.addEventListener('click', () => {
+  const now = Date.now();
+  setupTaps = setupTaps.filter(t => now - t < 2000).concat(now);
+  if (setupTaps.length >= 5) {
+    setupTaps = [];
+    setupOpen = true;
+    showSetup();
+  }
+});
+$('setupDone').addEventListener('click', () => {
+  history.replaceState(null, '', location.pathname + location.search);
+  setupOpen = false;
+  showSetup();
+});
+showSetup();
+if (!settings.apiKey) log('This phone is not set up yet.');
 
 // Installable with Add to Home screen: build the manifest in place (single-file app).
 (function setupManifest() {
