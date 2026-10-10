@@ -190,10 +190,11 @@ const DEFAULTS = {
   binAuto: false,
 };
 
-const DETECT_MS = 300;
+const DETECT_MS = 250;
 const SMALL_W = 32, SMALL_H = 24;
-const STILL_LIMIT = 4;        // max mean difference from previous frame to count as still
-const STILL_SAMPLES = 4;      // still samples in a row before triggering
+const STILL_LIMIT = 5;        // max mean difference from previous frame to count as still
+const STILL_SAMPLES = 3;      // still samples in a row before triggering (about 0.75 s)
+const EMPTY_FOLLOW = 0.05;    // how fast the empty frame follows slow lighting changes
 const REBASE_MS = 1500;       // re-save empty frame this long after a sort
 const LIVE_WAIT_MS = 8000;
 const PHOTO_TIMEOUT_MS = 30000;
@@ -513,7 +514,6 @@ async function afterSort() {
   setActivity('Settling…');
   await sleep(REBASE_MS);
   if (cameraReady()) saveEmptyFrame(false);
-  itemTriggered = false;
   stillCount = 0;
 }
 
@@ -609,7 +609,7 @@ let detectTimer = null;
 let emptyFrame = null;
 let prevFrame = null;
 let stillCount = 0;
-let itemTriggered = false;
+let lastItemFrame = null;   // the item just classified, so it is not classified again
 let busy = false;
 
 function grabGray() {
@@ -634,7 +634,7 @@ function saveEmptyFrame(manual) {
     return;
   }
   emptyFrame = grabGray();
-  itemTriggered = false;
+  lastItemFrame = null;
   stillCount = 0;
   log(manual ? 'Empty platform saved.' : 'Empty platform re-saved.');
 }
@@ -644,35 +644,47 @@ function detectTick() {
   const g = grabGray();
   const dPrev = prevFrame ? meanAbsDiff(g, prevFrame) : 255;
   prevFrame = g;
-  if (!emptyFrame) {
-    setState('Clear the platform and tap Set empty platform.');
-    return;
-  }
   if (busy) {
     stillCount = 0;
     return;
   }
-  const sens = settings.sensitivity;
-  const dEmpty = meanAbsDiff(g, emptyFrame);
-  const numbers = 'change ' + dEmpty.toFixed(1) + ' / ' + sens + ' · motion ' + dPrev.toFixed(1);
+  const still = dPrev < STILL_LIMIT;
 
-  if (itemTriggered) {
-    // Wait for the platform to clear before another item can trigger.
-    if (dEmpty < sens * 0.75 && dPrev < STILL_LIMIT) {
-      itemTriggered = false;
-      log('Platform clear again.');
+  // No empty frame yet: save the first still picture automatically.
+  // If an item was in view, the model answers EMPTY once it is removed and the frame is fixed then.
+  if (!emptyFrame) {
+    stillCount = still ? stillCount + 1 : 0;
+    setState('Hold the camera still over the empty platform…');
+    if (stillCount >= STILL_SAMPLES) {
+      emptyFrame = g;
+      stillCount = 0;
+      log('Empty platform saved automatically.');
     }
-    setState('Waiting for platform to clear · ' + numbers);
     return;
   }
 
-  if (dEmpty > sens && dPrev < STILL_LIMIT) stillCount++;
-  else stillCount = 0;
-  setState('Watching · ' + numbers);
+  const sens = settings.sensitivity;
+  const dEmpty = meanAbsDiff(g, emptyFrame);
+  const dItem = lastItemFrame ? meanAbsDiff(g, lastItemFrame) : Infinity;
+  const numbers = 'change ' + dEmpty.toFixed(1) + ' / ' + sens + ' · motion ' + dPrev.toFixed(1);
+
+  // Follow slow lighting changes while the platform looks empty.
+  if (still && dEmpty < sens * 0.5) {
+    for (let i = 0; i < g.length; i++) emptyFrame[i] += (g[i] - emptyFrame[i]) * EMPTY_FOLLOW;
+  }
+  if (lastItemFrame && still && dEmpty < sens * 0.75) {
+    lastItemFrame = null;
+    log('Platform clear.');
+  }
+
+  // A new item: different from the empty platform and from the item just classified.
+  const isNewItem = dEmpty > sens && dItem > sens;
+  stillCount = isNewItem && still ? stillCount + 1 : 0;
+  setState((lastItemFrame && !isNewItem ? 'Done · remove it or place the next item · ' : 'Watching · ') + numbers);
 
   if (stillCount >= STILL_SAMPLES) {
     stillCount = 0;
-    itemTriggered = true;
+    lastItemFrame = g;
     log('Item detected.');
     processItem();
   }
@@ -686,17 +698,34 @@ function parseCategory(text) {
   return unique.length === 1 ? unique[0] : null;
 }
 
+// Thinking makes answers slow, so ask for the lowest level. If the model does not
+// accept that setting, retry once without it and stop sending it.
+let useLowThinking = true;
+
 async function classifyPhoto() {
+  const image = grabJpeg(512, 0.75);
+  try {
+    return await requestPhoto(image, useLowThinking);
+  } catch (e) {
+    if (!useLowThinking || !/thinking/i.test(e.message)) throw e;
+    useLowThinking = false;
+    log('Model does not accept the low-thinking setting, sending without it.');
+    return requestPhoto(image, false);
+  }
+}
+
+async function requestPhoto(image, lowThinking) {
   if (!settings.apiKey) throw new Error('This phone is not set up yet (no API key).');
   const model = (settings.photoModel || CONFIG.photoModel).trim().replace(/^models\//, '');
   const body = {
     contents: [{
       parts: [
         { text: PROMPT },
-        { inline_data: { mime_type: 'image/jpeg', data: grabJpeg(640, 0.8) } },
+        { inline_data: { mime_type: 'image/jpeg', data: image } },
       ],
     }],
   };
+  if (lowThinking) body.generationConfig = { thinkingConfig: { thinkingLevel: 'low' } };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
   try {
@@ -742,11 +771,14 @@ async function processItem() {
   busy = true;
   showResult('…');
   try {
+    const t0 = performance.now();
     const { text, via } = await classify();
+    const secs = ((performance.now() - t0) / 1000).toFixed(1);
     const cat = parseCategory(text);
-    log('Answer (' + via + '): "' + text + '" → ' + (cat || 'UNSURE'));
+    log('Answer (' + via + ', ' + secs + ' s): "' + text + '" → ' + (cat || 'UNSURE'));
     if (cat === 'EMPTY') {
       showResult('');
+      if (cameraReady()) saveEmptyFrame(false); // the scene is empty, so use it as the new empty frame
       log('Model sees no item. If the scene changed, tap Set empty platform.');
     } else if (!cat) {
       showResult('UNSURE');
@@ -990,7 +1022,7 @@ $('classifyBtn').addEventListener('click', () => {
     log('Busy, wait for the current item.');
     return;
   }
-  itemTriggered = true; // so auto-detection does not classify the same item again
+  if (cameraReady()) lastItemFrame = grabGray(); // so auto-detection does not classify it again
   stillCount = 0;
   processItem();
 });
