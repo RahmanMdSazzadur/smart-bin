@@ -1,0 +1,1106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1216">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Smart Bin">
+<meta name="color-scheme" content="dark">
+<title>Smart Bin</title>
+<link id="manifestLink" rel="manifest">
+<link id="iconLink" rel="icon">
+<style>
+  :root {
+    --bg: #0f1216;
+    --card: #181c22;
+    --card-2: #222831;
+    --line: #2d3540;
+    --text: #e8ecf1;
+    --muted: #9aa4b2;
+    --accent: #4c8dff;
+    --ok: #3fb950;
+    --warn: #e3a008;
+    --bad: #f85149;
+    --energy: #f5a524;
+    --mix: #9aa4b2;
+    --bio: #3fb950;
+    --metal: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+    max-width: 640px;
+    margin: 0 auto;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 12px; }
+  .btn {
+    appearance: none; border: 1px solid var(--line); background: var(--card-2); color: var(--text);
+    font: inherit; font-size: 17px; font-weight: 600; min-height: 56px; padding: 8px 12px;
+    border-radius: 12px; width: 100%; cursor: pointer; touch-action: manipulation;
+  }
+  .btn:active:not(:disabled) { transform: scale(.98); filter: brightness(1.2); }
+  .btn:disabled { opacity: .4; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .pill { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--card-2); color: var(--muted); border: 1px solid var(--line); }
+  .pill::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
+  .pill[data-state="on"] { color: var(--text); }
+  .pill[data-state="on"]::before { background: var(--ok); }
+  .pill[data-state="warn"]::before { background: var(--warn); }
+  .pill[data-state="bad"]::before { background: var(--bad); }
+
+  .viewer { position: relative; aspect-ratio: 4 / 3; background: #000; border-radius: 12px; overflow: hidden; }
+  .viewer video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+  .result { font-size: 52px; font-weight: 800; text-align: center; letter-spacing: .04em; margin: 12px 0 2px; min-height: 64px; }
+  .result[data-cat="ENERGY"] { color: var(--energy); }
+  .result[data-cat="MIX"] { color: var(--mix); }
+  .result[data-cat="BIO"] { color: var(--bio); }
+  .result[data-cat="METAL"] { color: var(--metal); }
+  .result[data-cat="UNSURE"] { color: var(--warn); }
+  .result[data-cat="ERROR"] { color: var(--bad); }
+  .state { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn.cat { border-width: 2px; }
+  .btn[data-cat="ENERGY"] { border-color: var(--energy); color: var(--energy); }
+  .btn[data-cat="MIX"] { border-color: var(--mix); color: var(--mix); }
+  .btn[data-cat="BIO"] { border-color: var(--bio); color: var(--bio); }
+  .btn[data-cat="METAL"] { border-color: var(--metal); color: var(--metal); }
+
+  details.card > summary { font-size: 15px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; min-height: 32px; list-style-position: inside; }
+  label { display: block; margin-top: 12px; font-size: 14px; color: var(--muted); }
+  input[type="text"], input[type="password"] {
+    width: 100%; margin-top: 4px; font: inherit; font-size: 16px; color: var(--text);
+    background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  }
+  .check { display: flex; align-items: center; gap: 12px; font-size: 16px; color: var(--text); min-height: 44px; }
+  .check input { width: 26px; height: 26px; accent-color: var(--accent); }
+  input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--accent); height: 32px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  #log { list-style: none; margin: 0; padding: 0; font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; max-height: 320px; overflow-y: auto; }
+  #log li { padding: 3px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  #log li time { color: var(--muted); margin-right: 8px; }
+</style>
+</head>
+<body>
+
+<div class="row2">
+  <button id="connectBtn" class="btn primary">Connect bin</button>
+  <button id="cameraBtn" class="btn primary">Start camera</button>
+</div>
+<div class="pills">
+  <span id="binPill" class="pill">Bin off</span>
+  <span id="camPill" class="pill">Camera off</span>
+  <span id="livePill" class="pill" hidden>Live off</span>
+</div>
+
+<section class="card">
+  <div class="viewer">
+    <video id="video" playsinline muted autoplay></video>
+    <div id="placeholder" class="placeholder">Camera off</div>
+  </div>
+  <div id="result" class="result">—</div>
+  <div id="state" class="state">Start the camera.</div>
+  <div class="row2">
+    <button id="emptyBtn" class="btn">Set empty platform</button>
+    <button id="classifyBtn" class="btn">Classify now</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Manual sort</h2>
+  <div class="grid">
+    <button class="btn cat bin-only" data-cat="ENERGY" disabled>Energy</button>
+    <button class="btn cat bin-only" data-cat="MIX" disabled>Mix</button>
+    <button class="btn cat bin-only" data-cat="BIO" disabled>Bio</button>
+    <button class="btn cat bin-only" data-cat="METAL" disabled>Metal</button>
+    <button class="btn bin-only" data-raw="turn" disabled>Turn one section</button>
+    <button class="btn bin-only" data-raw="spill" disabled>Spill</button>
+  </div>
+</section>
+
+<details id="settingsCard" class="card">
+  <summary>Settings</summary>
+  <label for="apiKey">Gemini API key
+    <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+  </label>
+  <div class="hint">Stored only in this browser.</div>
+  <label for="photoModel">Photo model
+    <input id="photoModel" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+  </label>
+  <label for="liveModel">Live model
+    <input id="liveModel" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+  </label>
+  <label class="check"><input id="liveMode" type="checkbox"> Live mode</label>
+  <label for="sensitivity">Detection sensitivity: <strong id="sensValue"></strong>
+    <input id="sensitivity" type="range" min="4" max="60" step="1">
+  </label>
+  <div class="hint">Lower is more sensitive. Compare with the "change" number shown under the result.</div>
+  <label for="mqttHost">Broker host
+    <input id="mqttHost" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="broker.hivemq.com">
+  </label>
+  <div class="hint">A host name connects to wss://host:8884/mqtt. You can also enter a full wss:// address.</div>
+  <label for="topicPrefix">Secret topic name
+    <input id="topicPrefix" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+  </label>
+  <div class="hint">Put exactly the same name in arduino_secrets.h. Anyone who knows it can control the bin.</div>
+  <label for="mqttUser">Broker user (optional)
+    <input id="mqttUser" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+  </label>
+  <label for="mqttPass">Broker password (optional)
+    <input id="mqttPass" type="password" autocomplete="off" spellcheck="false">
+  </label>
+  <div class="hint">Leave both empty for a public broker.</div>
+</details>
+
+<section class="card">
+  <h2>Log</h2>
+  <ol id="log"></ol>
+</section>
+
+<script>
+'use strict';
+
+// ---------------- Constants ----------------
+// The bin (arduino/smart_bin_wifi) and this app both connect to an MQTT broker.
+// The app publishes ENERGY, MIX, BIO, METAL, turn or spill; the bin answers BUSY and DONE.
+// Topics are <secret topic name>/cmd, /status and /online (retained ONLINE / OFFLINE from the bin).
+const topic = name => settings.topicPrefix + '/' + name;
+const SORT_TIMEOUT_MS = 30000;
+const MQTT_KEEPALIVE_S = 60;
+const MQTT_PING_MS = 30000;
+const MQTT_RECONNECT_MS = 3000;
+
+const PROMPT = 'The photo shows one item of household waste lying on a platform. Sort it by Finnish household rules into exactly one of: BIO (food scraps, peels, coffee grounds, paper tissue), METAL (cans, foil, metal lids, small metal objects), ENERGY (plastic packaging, wrappers, dirty cardboard and other burnable packaging), MIX (everything else, such as ceramics, hygiene products, mixed materials). If the platform is empty answer EMPTY. Answer with that single word only.';
+const LIVE_PROMPT = PROMPT + ' You are watching a live camera above the platform. Stay silent. Only when you are told an item has been placed, call the sort_item function once with the category. Never answer in speech.';
+const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
+
+const DEFAULTS = {
+  apiKey: '',
+  photoModel: 'gemini-2.5-flash',
+  liveModel: 'gemini-3.8-live',
+  liveMode: false,
+  sensitivity: 16,
+  mqttHost: 'broker.hivemq.com',
+  topicPrefix: '',
+  mqttUser: '',
+  mqttPass: '',
+  binAuto: false,
+};
+
+const DETECT_MS = 300;
+const SMALL_W = 32, SMALL_H = 24;
+const STILL_LIMIT = 4;        // max mean difference from previous frame to count as still
+const STILL_SAMPLES = 4;      // still samples in a row before triggering
+const REBASE_MS = 1500;       // re-save empty frame this long after a sort
+const LIVE_WAIT_MS = 8000;
+const PHOTO_TIMEOUT_MS = 30000;
+const LIVE_FRAME_MS = 1000;
+const LIVE_RECYCLE_MS = 100000;
+const LIVE_RECONNECT_MS = 1500;
+const LIVE_BACKOFF_MS = 30000; // after repeated failed starts, to avoid hammering the API
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+// ---------------- Log ----------------
+const logEl = $('log');
+function log(msg) {
+  const li = document.createElement('li');
+  const time = document.createElement('time');
+  time.textContent = new Date().toLocaleTimeString([], { hour12: false });
+  li.append(time, String(msg));
+  logEl.prepend(li);
+  while (logEl.children.length > 200) logEl.lastChild.remove();
+  console.log(msg);
+}
+window.addEventListener('error', e => log('Error: ' + e.message));
+window.addEventListener('unhandledrejection', e => log('Error: ' + (e.reason && e.reason.message || e.reason)));
+
+// ---------------- Settings ----------------
+const settings = {};
+for (const name of Object.keys(DEFAULTS)) {
+  try {
+    const raw = localStorage.getItem('smartbin.' + name);
+    settings[name] = raw === null ? DEFAULTS[name] : JSON.parse(raw);
+  } catch {
+    settings[name] = DEFAULTS[name];
+  }
+}
+function saveSetting(name, value) {
+  settings[name] = value;
+  try {
+    localStorage.setItem('smartbin.' + name, JSON.stringify(value));
+  } catch (e) {
+    log('Could not save setting: ' + e.message);
+  }
+}
+
+// ---------------- UI helpers ----------------
+const video = $('video');
+const resultEl = $('result');
+const stateEl = $('state');
+
+function setPill(el, text, state) {
+  el.textContent = text;
+  el.dataset.state = state || '';
+}
+function showResult(word) {
+  resultEl.textContent = word || '—';
+  resultEl.dataset.cat = word || '';
+}
+let activity = '';
+function setActivity(text) {
+  activity = text;
+  if (text) stateEl.textContent = text;
+}
+function setState(text) {
+  if (!activity) stateEl.textContent = text;
+}
+// ---------------- MQTT over WebSocket to the bin ----------------
+// A minimal MQTT 3.1.1 client: CONNECT, SUBSCRIBE, PUBLISH (QoS 0) and PING.
+const bin = {
+  ws: null,
+  connected: false,    // logged in to the broker
+  online: false,       // bin reported ONLINE
+  wanted: false,       // user asked to be connected
+  buf: new Uint8Array(0),
+  pingTimer: null,
+  reconnectTimer: null,
+  doneWaiter: null,
+  packetId: 0,
+};
+
+function mqttString(str) {
+  const b = encoder.encode(str);
+  return [b.length >> 8, b.length & 255, ...b];
+}
+function mqttPacket(first, body) {
+  const len = [];
+  let n = body.length;
+  do {
+    let digit = n % 128;
+    n = Math.floor(n / 128);
+    if (n > 0) digit |= 128;
+    len.push(digit);
+  } while (n > 0);
+  return new Uint8Array([first, ...len, ...body]);
+}
+function brokerUrl() {
+  const host = settings.mqttHost.trim();
+  return /^wss?:\/\//.test(host) ? host : 'wss://' + host + ':8884/mqtt';
+}
+
+function isBinConnected() {
+  return bin.connected && bin.online;
+}
+function updateBinUi() {
+  const pill = $('binPill');
+  if (!bin.ws) setPill(pill, bin.wanted ? 'Bin reconnecting…' : 'Bin off', bin.wanted ? 'warn' : '');
+  else if (!bin.connected) setPill(pill, 'Connecting…', 'warn');
+  else if (!bin.online) setPill(pill, 'Bin offline', 'bad');
+  else setPill(pill, 'Bin online', 'on');
+  document.querySelectorAll('.bin-only').forEach(b => { b.disabled = !isBinConnected(); });
+  $('connectBtn').textContent = bin.wanted ? 'Disconnect bin' : 'Connect bin';
+}
+
+function toggleBin() {
+  if (bin.wanted) {
+    bin.wanted = false;
+    saveSetting('binAuto', false);
+    clearTimeout(bin.reconnectTimer);
+    if (bin.ws) {
+      try { bin.ws.send(new Uint8Array([0xe0, 0])); } catch { /* closing anyway */ }
+      bin.ws.close();
+    }
+    updateBinUi();
+    log('Bin disconnected.');
+    return;
+  }
+  bin.wanted = true;
+  saveSetting('binAuto', true);
+  binConnect();
+}
+
+function binConnect() {
+  clearTimeout(bin.reconnectTimer);
+  if (bin.ws || !bin.wanted) return;
+  if (!settings.mqttHost || !settings.topicPrefix) {
+    log('Enter the broker host and secret topic name in Settings.');
+    $('settingsCard').open = true;
+    bin.wanted = false;
+    updateBinUi();
+    return;
+  }
+  let ws;
+  try {
+    ws = new WebSocket(brokerUrl(), 'mqtt');
+  } catch (e) {
+    log('Broker connect failed: ' + e.message);
+    scheduleBinReconnect();
+    return;
+  }
+  ws.binaryType = 'arraybuffer';
+  bin.ws = ws;
+  bin.buf = new Uint8Array(0);
+  updateBinUi();
+  ws.onopen = () => {
+    if (ws !== bin.ws) return;
+    const clientId = 'smartbin-phone-' + Math.random().toString(16).slice(2, 8);
+    const user = settings.mqttUser;
+    const flags = 0x02 | (user ? 0xc0 : 0); // clean session, plus username and password if given
+    const body = [
+      ...mqttString('MQTT'), 4,       // protocol name and level 3.1.1
+      flags,
+      MQTT_KEEPALIVE_S >> 8, MQTT_KEEPALIVE_S & 255,
+      ...mqttString(clientId),
+      ...(user ? [...mqttString(user), ...mqttString(settings.mqttPass)] : []),
+    ];
+    ws.send(mqttPacket(0x10, body));
+  };
+  ws.onmessage = ev => {
+    if (ws === bin.ws) onBrokerData(new Uint8Array(ev.data));
+  };
+  ws.onerror = () => {
+    if (ws === bin.ws) log('Broker connection error.');
+  };
+  ws.onclose = ev => {
+    if (ws !== bin.ws) return;
+    bin.ws = null;
+    bin.connected = false;
+    bin.online = false;
+    clearInterval(bin.pingTimer);
+    if (bin.doneWaiter) bin.doneWaiter(false);
+    if (bin.wanted) log('Broker connection closed (' + ev.code + ').');
+    updateBinUi();
+    scheduleBinReconnect();
+  };
+}
+
+function scheduleBinReconnect() {
+  if (!bin.wanted) return;
+  clearTimeout(bin.reconnectTimer);
+  bin.reconnectTimer = setTimeout(binConnect, MQTT_RECONNECT_MS);
+}
+
+// WebSocket messages can hold several MQTT packets or part of one, so buffer them.
+function onBrokerData(chunk) {
+  const data = new Uint8Array(bin.buf.length + chunk.length);
+  data.set(bin.buf);
+  data.set(chunk, bin.buf.length);
+  let pos = 0;
+  while (data.length - pos >= 2) {
+    let len = 0, mult = 1, i = pos + 1, byte, complete = true;
+    do {
+      if (i >= data.length) { complete = false; break; }
+      byte = data[i++];
+      len += (byte & 127) * mult;
+      mult *= 128;
+    } while (byte & 128);
+    if (!complete || i + len > data.length) break;
+    handleMqttPacket(data[pos], data.subarray(i, i + len));
+    pos = i + len;
+  }
+  bin.buf = data.slice(pos);
+}
+
+function handleMqttPacket(first, body) {
+  const type = first >> 4;
+  if (type === 2) { // CONNACK
+    if (body[1] !== 0) {
+      log('Broker refused the login (code ' + body[1] + '). Check the broker settings.');
+      bin.wanted = false;
+      bin.ws.close();
+      return;
+    }
+    bin.connected = true;
+    log('Broker connected.');
+    bin.packetId = (bin.packetId % 65535) + 1;
+    bin.ws.send(mqttPacket(0x82, [
+      bin.packetId >> 8, bin.packetId & 255,
+      ...mqttString(topic('status')), 0,
+      ...mqttString(topic('online')), 0,
+    ]));
+    clearInterval(bin.pingTimer);
+    bin.pingTimer = setInterval(() => {
+      if (bin.ws && bin.ws.readyState === WebSocket.OPEN) bin.ws.send(new Uint8Array([0xc0, 0]));
+    }, MQTT_PING_MS);
+    updateBinUi();
+  } else if (type === 3) { // PUBLISH
+    const qos = (first >> 1) & 3;
+    const topicLen = (body[0] << 8) | body[1];
+    const name = decoder.decode(body.subarray(2, 2 + topicLen));
+    const start = 2 + topicLen + (qos > 0 ? 2 : 0);
+    onBinMessage(name, decoder.decode(body.subarray(start)).trim());
+  }
+}
+
+function onBinMessage(name, payload) {
+  if (name === topic('online')) {
+    const online = payload === 'ONLINE';
+    if (online !== bin.online) log(online ? 'Bin online.' : 'Bin offline.');
+    bin.online = online;
+    if (!online && bin.doneWaiter) bin.doneWaiter(false);
+    updateBinUi();
+  } else if (name === topic('status')) {
+    log('Bin: ' + payload);
+    if (payload === 'DONE' && bin.doneWaiter) bin.doneWaiter(true);
+  }
+}
+
+function publishCmd(text) {
+  if (!bin.connected || !bin.ws || bin.ws.readyState !== WebSocket.OPEN) throw new Error('Not connected to the broker');
+  bin.ws.send(mqttPacket(0x30, [...mqttString(topic('cmd')), ...encoder.encode(text)]));
+}
+
+function waitForDone(ms) {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => finish(false), ms);
+    function finish(ok) {
+      clearTimeout(timer);
+      if (bin.doneWaiter === finish) bin.doneWaiter = null;
+      resolve(ok);
+    }
+    bin.doneWaiter = finish;
+  });
+}
+
+// Sends a command and waits for DONE. Returns true if the command was sent.
+async function sendAndWait(cmd, activityText) {
+  setActivity(activityText);
+  const done = waitForDone(SORT_TIMEOUT_MS);
+  try {
+    publishCmd(cmd);
+    log('Sent ' + cmd);
+  } catch (e) {
+    if (bin.doneWaiter) bin.doneWaiter(false);
+    log('Send failed: ' + e.message);
+    return false;
+  }
+  const ok = await done;
+  log(ok ? 'Bin finished.' : 'No DONE from the bin within 30 s.');
+  return true;
+}
+
+async function runSort(cat) {
+  if (!isBinConnected()) {
+    log(cat + ': bin not online, nothing sent.');
+    return false;
+  }
+  return sendAndWait(cat, 'Sorting to ' + cat + '…');
+}
+
+// Manual "turn" or "spill" for testing and calibration.
+async function manualRaw(cmd) {
+  if (busy) {
+    log('Busy, wait for the current item.');
+    return;
+  }
+  busy = true;
+  try {
+    await sendAndWait(cmd, 'Sending ' + cmd + '…');
+  } finally {
+    busy = false;
+    setActivity('');
+  }
+}
+
+// After a sort the platform should be empty again; wait, then re-save it.
+async function afterSort() {
+  setActivity('Settling…');
+  await sleep(REBASE_MS);
+  if (cameraReady()) saveEmptyFrame(false);
+  itemTriggered = false;
+  stillCount = 0;
+}
+
+// ---------------- Camera ----------------
+let stream = null;
+let wakeLock = null;
+
+function cameraReady() {
+  return !!stream && video.readyState >= 2 && video.videoWidth > 0;
+}
+
+async function toggleCamera() {
+  if (stream) {
+    stopCamera();
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    log('Camera not available. Open the page over HTTPS.');
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    });
+    video.srcObject = stream;
+    await video.play();
+    $('placeholder').hidden = true;
+    $('cameraBtn').textContent = 'Stop camera';
+    setPill($('camPill'), 'Camera on', 'on');
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      log('Camera stopped by the system.');
+      stopCamera();
+    });
+    detectTimer = setInterval(detectTick, DETECT_MS);
+    requestWakeLock();
+    log('Camera started (' + video.videoWidth + '×' + video.videoHeight + ').');
+    if (!emptyFrame) setState('Clear the platform and tap Set empty platform.');
+  } catch (e) {
+    stream = null;
+    log('Camera failed: ' + e.message);
+  }
+}
+
+function stopCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  video.srcObject = null;
+  clearInterval(detectTimer);
+  prevFrame = null;
+  stillCount = 0;
+  $('placeholder').hidden = false;
+  $('cameraBtn').textContent = 'Start camera';
+  setPill($('camPill'), 'Camera off', '');
+  setState('Start the camera.');
+  if (wakeLock) wakeLock.release().catch(() => {});
+  wakeLock = null;
+  log('Camera stopped.');
+}
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) {
+    log('Screen wake lock not supported.');
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) {
+    log('Wake lock failed: ' + e.message);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && stream && !wakeLock) requestWakeLock();
+});
+
+const bigCanvas = document.createElement('canvas');
+function grabJpeg(maxW, quality) {
+  const scale = Math.min(1, maxW / video.videoWidth);
+  bigCanvas.width = Math.round(video.videoWidth * scale);
+  bigCanvas.height = Math.round(video.videoHeight * scale);
+  bigCanvas.getContext('2d').drawImage(video, 0, 0, bigCanvas.width, bigCanvas.height);
+  return bigCanvas.toDataURL('image/jpeg', quality).split(',')[1];
+}
+
+// ---------------- Item detection ----------------
+const smallCanvas = document.createElement('canvas');
+smallCanvas.width = SMALL_W;
+smallCanvas.height = SMALL_H;
+const smallCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
+
+let detectTimer = null;
+let emptyFrame = null;
+let prevFrame = null;
+let stillCount = 0;
+let itemTriggered = false;
+let busy = false;
+
+function grabGray() {
+  smallCtx.drawImage(video, 0, 0, SMALL_W, SMALL_H);
+  const d = smallCtx.getImageData(0, 0, SMALL_W, SMALL_H).data;
+  const g = new Float32Array(SMALL_W * SMALL_H);
+  for (let i = 0, j = 0; i < g.length; i++, j += 4) {
+    g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+  }
+  return g;
+}
+
+function meanAbsDiff(a, b) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
+  return sum / a.length;
+}
+
+function saveEmptyFrame(manual) {
+  if (!cameraReady()) {
+    log('Start the camera first.');
+    return;
+  }
+  emptyFrame = grabGray();
+  itemTriggered = false;
+  stillCount = 0;
+  log(manual ? 'Empty platform saved.' : 'Empty platform re-saved.');
+}
+
+function detectTick() {
+  if (!cameraReady()) return;
+  const g = grabGray();
+  const dPrev = prevFrame ? meanAbsDiff(g, prevFrame) : 255;
+  prevFrame = g;
+  if (!emptyFrame) {
+    setState('Clear the platform and tap Set empty platform.');
+    return;
+  }
+  if (busy) {
+    stillCount = 0;
+    return;
+  }
+  const sens = settings.sensitivity;
+  const dEmpty = meanAbsDiff(g, emptyFrame);
+  const numbers = 'change ' + dEmpty.toFixed(1) + ' / ' + sens + ' · motion ' + dPrev.toFixed(1);
+
+  if (itemTriggered) {
+    // Wait for the platform to clear before another item can trigger.
+    if (dEmpty < sens * 0.75 && dPrev < STILL_LIMIT) {
+      itemTriggered = false;
+      log('Platform clear again.');
+    }
+    setState('Waiting for platform to clear · ' + numbers);
+    return;
+  }
+
+  if (dEmpty > sens && dPrev < STILL_LIMIT) stillCount++;
+  else stillCount = 0;
+  setState('Watching · ' + numbers);
+
+  if (stillCount >= STILL_SAMPLES) {
+    stillCount = 0;
+    itemTriggered = true;
+    log('Item detected.');
+    processItem();
+  }
+}
+
+// ---------------- Classification ----------------
+function parseCategory(text) {
+  const words = String(text || '').toUpperCase().match(/\b(ENERGY|MIX|BIO|METAL|EMPTY)\b/g);
+  if (!words) return null;
+  const unique = [...new Set(words)];
+  return unique.length === 1 ? unique[0] : null;
+}
+
+async function classifyPhoto() {
+  if (!settings.apiKey) throw new Error('No API key. Enter it in Settings.');
+  const model = (settings.photoModel || DEFAULTS.photoModel).trim().replace(/^models\//, '');
+  const body = {
+    contents: [{
+      parts: [
+        { text: PROMPT },
+        { inline_data: { mime_type: 'image/jpeg', data: grabJpeg(640, 0.8) } },
+      ],
+    }],
+  };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.apiKey },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
+    const parts = (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
+    return parts.map(p => p.text || '').join(' ').trim();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Photo request timed out.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function classify() {
+  if (settings.liveMode) {
+    if (live.ready) {
+      setActivity('Asking live model…');
+      const answer = await liveAsk(LIVE_WAIT_MS);
+      if (answer) return { text: answer, via: 'live' };
+      log('Live mode gave no answer within 8 s, using photo mode.');
+    } else {
+      log('Live session not ready, using photo mode.');
+    }
+  }
+  setActivity('Classifying photo…');
+  return { text: await classifyPhoto(), via: 'photo' };
+}
+
+async function processItem() {
+  if (busy) return;
+  if (!cameraReady()) {
+    log('Start the camera first.');
+    return;
+  }
+  busy = true;
+  showResult('…');
+  try {
+    const { text, via } = await classify();
+    const cat = parseCategory(text);
+    log('Answer (' + via + '): "' + text + '" → ' + (cat || 'UNSURE'));
+    if (cat === 'EMPTY') {
+      showResult('');
+      log('Model sees no item. If the scene changed, tap Set empty platform.');
+    } else if (!cat) {
+      showResult('UNSURE');
+      log('Not sure. Tap a manual sort button.');
+    } else {
+      showResult(cat);
+      if (await runSort(cat)) await afterSort();
+    }
+  } catch (e) {
+    showResult('ERROR');
+    log('Classification failed: ' + e.message);
+  } finally {
+    busy = false;
+    setActivity('');
+  }
+}
+
+async function manualSort(cat) {
+  if (busy) {
+    log('Busy, wait for the current item.');
+    return;
+  }
+  busy = true;
+  showResult(cat);
+  try {
+    if (await runSort(cat)) await afterSort();
+  } finally {
+    busy = false;
+    setActivity('');
+  }
+}
+
+// ---------------- Live mode ----------------
+const live = {
+  ws: null,
+  ready: false,
+  startedAt: 0,
+  pending: null,
+  transcript: '',
+  frameTimer: null,
+  reconnectTimer: null,
+  failedStarts: 0,
+  msgChain: Promise.resolve(),
+};
+
+function updateLivePill() {
+  const pill = $('livePill');
+  pill.hidden = !settings.liveMode;
+  if (live.ready) setPill(pill, 'Live on', 'on');
+  else if (live.ws) setPill(pill, 'Live connecting…', 'warn');
+  else setPill(pill, 'Live off', settings.liveMode ? 'bad' : '');
+}
+
+function liveSetupMessage() {
+  const model = (settings.liveModel || DEFAULTS.liveModel).trim().replace(/^models\//, '');
+  return {
+    setup: {
+      model: 'models/' + model,
+      generationConfig: { responseModalities: ['AUDIO'] },
+      outputAudioTranscription: {},
+      systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
+      tools: [{
+        functionDeclarations: [{
+          name: 'sort_item',
+          description: 'Send the waste category of the item on the platform to the bin.',
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              category: { type: 'STRING', enum: ['ENERGY', 'MIX', 'BIO', 'METAL', 'EMPTY'] },
+            },
+            required: ['category'],
+          },
+        }],
+      }],
+    },
+  };
+}
+
+function liveSend(obj) {
+  if (live.ws && live.ws.readyState === WebSocket.OPEN) {
+    live.ws.send(JSON.stringify(obj));
+    return true;
+  }
+  return false;
+}
+
+function liveStart() {
+  clearTimeout(live.reconnectTimer);
+  if (!settings.liveMode || live.ws) return;
+  if (!settings.apiKey) {
+    log('Live mode needs an API key.');
+    updateLivePill();
+    return;
+  }
+  const url = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(settings.apiKey);
+  let ws;
+  try {
+    ws = new WebSocket(url);
+  } catch (e) {
+    log('Live socket failed: ' + e.message);
+    scheduleLiveReconnect();
+    return;
+  }
+  live.ws = ws;
+  live.ready = false;
+  updateLivePill();
+  ws.onopen = () => {
+    if (ws === live.ws) ws.send(JSON.stringify(liveSetupMessage()));
+  };
+  ws.onmessage = ev => {
+    live.msgChain = live.msgChain.then(() => onLiveMessage(ws, ev.data)).catch(e => log('Live message error: ' + e.message));
+  };
+  ws.onerror = () => {
+    if (ws === live.ws) log('Live socket error.');
+  };
+  ws.onclose = ev => onLiveClose(ws, ev);
+}
+
+async function onLiveMessage(ws, data) {
+  if (ws !== live.ws) return;
+  let text;
+  if (typeof data === 'string') text = data;
+  else if (data instanceof Blob) text = await data.text();
+  else text = decoder.decode(data);
+  let msg;
+  try {
+    msg = JSON.parse(text);
+  } catch {
+    log('Live: unreadable message.');
+    return;
+  }
+
+  if (msg.setupComplete) {
+    live.ready = true;
+    live.startedAt = Date.now();
+    live.failedStarts = 0;
+    clearInterval(live.frameTimer);
+    live.frameTimer = setInterval(sendLiveFrame, LIVE_FRAME_MS);
+    updateLivePill();
+    log('Live session started.');
+  }
+
+  if (msg.toolCall) {
+    const calls = msg.toolCall.functionCalls || [];
+    const responses = calls.map(fc => ({ id: fc.id, name: fc.name, response: { result: 'ok' } }));
+    if (responses.length) liveSend({ toolResponse: { functionResponses: responses } });
+    for (const fc of calls) {
+      if (fc.name !== 'sort_item') continue;
+      const cat = String((fc.args && fc.args.category) || '');
+      log('Live tool call: sort_item(' + cat + ')');
+      if (live.pending) live.pending(cat);
+      else log('No item was waiting, tool call ignored.');
+    }
+  }
+
+  // The model's audio is never played; only its transcription is logged.
+  const sc = msg.serverContent;
+  if (sc) {
+    if (sc.outputTranscription && sc.outputTranscription.text) live.transcript += sc.outputTranscription.text;
+    if ((sc.turnComplete || sc.generationComplete) && live.transcript.trim()) {
+      log('Live said: ' + live.transcript.trim());
+      live.transcript = '';
+    }
+  }
+
+  if (msg.goAway) log('Live session ending soon.');
+}
+
+function onLiveClose(ws, ev) {
+  if (ws !== live.ws) return;
+  const wasReady = live.ready;
+  live.ws = null;
+  live.ready = false;
+  live.transcript = '';
+  clearInterval(live.frameTimer);
+  if (live.pending) live.pending(null);
+  log('Live socket closed (' + ev.code + (ev.reason ? ': ' + ev.reason : '') + ').');
+  if (!wasReady) live.failedStarts++;
+  updateLivePill();
+  scheduleLiveReconnect();
+}
+
+function scheduleLiveReconnect() {
+  if (!settings.liveMode) return;
+  clearTimeout(live.reconnectTimer);
+  const delay = live.failedStarts >= 3 ? LIVE_BACKOFF_MS : LIVE_RECONNECT_MS;
+  if (delay > LIVE_RECONNECT_MS) log('Live failed to start ' + live.failedStarts + ' times. Check key and model. Retrying in 30 s.');
+  live.reconnectTimer = setTimeout(liveStart, delay);
+}
+
+function liveStop() {
+  clearTimeout(live.reconnectTimer);
+  clearInterval(live.frameTimer);
+  const ws = live.ws;
+  live.ws = null;
+  live.ready = false;
+  live.failedStarts = 0;
+  if (live.pending) live.pending(null);
+  if (ws) ws.close(1000, 'stopped');
+  updateLivePill();
+}
+
+function sendLiveFrame() {
+  if (!live.ready || !cameraReady()) return;
+  if (live.ws.bufferedAmount > 1000000) return; // network is behind; skip a frame
+  liveSend({ realtimeInput: { video: { data: grabJpeg(640, 0.7), mimeType: 'image/jpeg' } } });
+}
+
+function liveAsk(ms) {
+  return new Promise(resolve => {
+    if (!live.ready) {
+      resolve(null);
+      return;
+    }
+    const timer = setTimeout(() => finish(null), ms);
+    function finish(cat) {
+      clearTimeout(timer);
+      if (live.pending === finish) live.pending = null;
+      resolve(cat);
+    }
+    live.pending = finish;
+    sendLiveFrame();
+    if (!liveSend({ realtimeInput: { text: LIVE_ITEM_TEXT } })) finish(null);
+  });
+}
+
+// Video sessions are limited to 2 minutes, so refresh every 100 s while idle.
+setInterval(() => {
+  if (live.ready && !live.pending && !busy && Date.now() - live.startedAt >= LIVE_RECYCLE_MS) {
+    log('Refreshing live session.');
+    live.ws.close(1000, 'refresh');
+  }
+}, 2000);
+
+// ---------------- Wiring ----------------
+$('connectBtn').addEventListener('click', toggleBin);
+$('cameraBtn').addEventListener('click', toggleCamera);
+$('emptyBtn').addEventListener('click', () => saveEmptyFrame(true));
+$('classifyBtn').addEventListener('click', () => {
+  if (busy) {
+    log('Busy, wait for the current item.');
+    return;
+  }
+  itemTriggered = true; // so auto-detection does not classify the same item again
+  stillCount = 0;
+  processItem();
+});
+document.querySelectorAll('[data-cat]').forEach(b => {
+  b.addEventListener('click', () => manualSort(b.dataset.cat));
+});
+document.querySelectorAll('[data-raw]').forEach(b => {
+  b.addEventListener('click', () => manualRaw(b.dataset.raw));
+});
+
+const apiKeyInput = $('apiKey');
+const photoModelInput = $('photoModel');
+const liveModelInput = $('liveModel');
+const liveModeInput = $('liveMode');
+const sensInput = $('sensitivity');
+
+apiKeyInput.value = settings.apiKey;
+photoModelInput.value = settings.photoModel;
+liveModelInput.value = settings.liveModel;
+liveModeInput.checked = !!settings.liveMode;
+sensInput.value = settings.sensitivity;
+$('sensValue').textContent = settings.sensitivity;
+if (!settings.apiKey) $('settingsCard').open = true;
+
+function restartLive() {
+  if (!settings.liveMode) return;
+  liveStop();
+  liveStart();
+}
+apiKeyInput.addEventListener('change', () => {
+  saveSetting('apiKey', apiKeyInput.value.trim());
+  log(settings.apiKey ? 'API key saved.' : 'API key cleared.');
+  restartLive();
+});
+photoModelInput.addEventListener('change', () => {
+  saveSetting('photoModel', photoModelInput.value.trim() || DEFAULTS.photoModel);
+  photoModelInput.value = settings.photoModel;
+  log('Photo model: ' + settings.photoModel);
+});
+liveModelInput.addEventListener('change', () => {
+  saveSetting('liveModel', liveModelInput.value.trim() || DEFAULTS.liveModel);
+  liveModelInput.value = settings.liveModel;
+  log('Live model: ' + settings.liveModel);
+  restartLive();
+});
+liveModeInput.addEventListener('change', () => {
+  saveSetting('liveMode', liveModeInput.checked);
+  log('Live mode ' + (settings.liveMode ? 'on.' : 'off.'));
+  if (settings.liveMode) liveStart();
+  else liveStop();
+});
+// First run: make a random secret topic name to copy into arduino_secrets.h.
+if (!settings.topicPrefix) {
+  const random = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => (b % 36).toString(36)).join('');
+  saveSetting('topicPrefix', 'smartbin-' + random);
+}
+for (const name of ['mqttHost', 'topicPrefix', 'mqttUser', 'mqttPass']) {
+  const input = $(name);
+  input.value = settings[name];
+  input.addEventListener('change', () => {
+    saveSetting(name, input.value.trim());
+    log('Broker settings saved.');
+    if (bin.ws) bin.ws.close(); // reconnects with the new settings
+  });
+}
+sensInput.addEventListener('input', () => {
+  saveSetting('sensitivity', Number(sensInput.value));
+  $('sensValue').textContent = settings.sensitivity;
+});
+
+// Installable with Add to Home screen: build the manifest in place (single-file app).
+(function setupManifest() {
+  const icon = 'data:image/svg+xml,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0f1216"/>' +
+    '<path d="M150 170h212l-20 250a20 20 0 0 1-20 18H190a20 20 0 0 1-20-18z" fill="#3fb950"/>' +
+    '<rect x="130" y="120" width="252" height="34" rx="12" fill="#e8ecf1"/><rect x="220" y="92" width="72" height="28" rx="8" fill="#e8ecf1"/></svg>');
+  $('iconLink').href = icon;
+  try {
+    const manifest = {
+      name: 'Smart Bin',
+      short_name: 'Smart Bin',
+      start_url: location.href.split('#')[0],
+      scope: new URL('./', location.href).href,
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#0f1216',
+      theme_color: '#0f1216',
+      icons: [{ src: icon, sizes: 'any', type: 'image/svg+xml' }],
+    };
+    $('manifestLink').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
+  } catch { /* manifest is optional */ }
+})();
+
+updateLivePill();
+if (!window.isSecureContext) log('Not a secure context. Camera and Bluetooth need HTTPS.');
+if (settings.binAuto && settings.mqttHost) {
+  bin.wanted = true;
+  binConnect();
+}
+if (settings.liveMode) liveStart();
+log('Smart Bin ready.');
+</script>
+</body>
+</html>
