@@ -19,7 +19,9 @@ phone app  --wss:8884-->  broker.hivemq.com  <--TLS:8883--  Arduino Uno R4 WiFi
 
 The app has to be on an `https://` page because Chrome only allows the camera there. Chrome also blocks an `https://` page from talking to a plain `http://` address on the local network, such as the Arduino's. Going through the broker avoids that block. The link needs internet access.
 
-The public broker has no passwords, so the topics start with a **secret topic name** (like `smartbin-k3x9q2m7ab`) that only your app and bin know. The app makes one at random the first time it opens.
+The public broker has no passwords, so the topics start with a topic name (`topicPrefix` in `CONFIG` in `web/index.html`). The same name goes in `arduino_secrets.h`.
+
+**Built-in secrets:** the Groq API key and the topic name are written into `CONFIG` so every device works without setup. The page is public, so anyone can read them: they could use up the free Groq limits or send commands to the bin. If Groq disables the key, create a new one and replace `groqKey` in `CONFIG`.
 
 | Topic | Direction | Messages |
 |---|---|---|
@@ -39,16 +41,14 @@ A free public broker comes with no uptime guarantee. If it is down, `broker.emqx
 
 **Power:** run the servos from a separate 6 V battery. Connect the battery's ground to the Arduino GND. Never power servos from the Arduino 5V pin.
 
-## 2. Get the secret topic name
+## 2. Check the topic name
 
-1. Open the app (step 5) once in Chrome on the phone.
-2. Open the hidden setup page (see step 5). The **Secret topic name** field already holds a random name such as `smartbin-k3x9q2m7ab`.
-3. Write it down exactly. You need it for `arduino_secrets.h`.
+Copy `topicPrefix` from `CONFIG` in `web/index.html` (for example `smartbin-b0p1r0mw5c`). You need it for `arduino_secrets.h`.
 
 ## 3. Upload the Wi-Fi sketch
 
 1. In the Arduino IDE, install the **Arduino UNO R4 Boards** package and the **ArduinoMqttClient** library. `WiFiS3` comes with the board package.
-2. Open `arduino/smart_bin_wifi/smart_bin_wifi.ino`, then fill in `arduino_secrets.h` (it opens as a tab): Wi-Fi name and password, and the secret topic name from step 2. Leave the broker user and password empty. The board only joins **2.4 GHz** Wi-Fi.
+2. Open `arduino/smart_bin_wifi/smart_bin_wifi.ino`, then fill in `arduino_secrets.h` (it opens as a tab): Wi-Fi name and password, and the topic name from step 2. Leave the broker user and password empty. The board only joins **2.4 GHz** Wi-Fi.
 3. Set the bin order in the sketch: `TURNS[4] = {0, 1, 2, 3}` is how many turns from home reach Energy, Mix, Bio and Metal. Change it to match your carousel.
 4. Upload. In the Serial Monitor at 9600 baud you should see the base home, then `Wi-Fi connected` and `Broker connected, bin online`.
    If Wi-Fi fails, update the board's connectivity firmware (Tools → Firmware Updater).
@@ -69,11 +69,8 @@ A free public broker comes with no uptime guarantee. If it is down, `broker.emqx
 
 1. Open the URL in **Safari on iPhone** (iOS 16.4 or newer) or **Chrome on Android**, and allow the camera when asked.
 2. Recommended on iPhone: **Share → Add to Home Screen**, then always open it from that icon. Safari can erase saved settings for websites you haven't opened for 7 days, but not for Home Screen apps. On Android: Chrome menu → **Add to Home screen**.
-3. Open the **hidden setup page**: add `#setup` to the end of the address, or **tap the big result text (—) 5 times quickly**. The tap works in a Home Screen app, which has no address bar. Enter:
-   - a **Groq API key**: free at [console.groq.com](https://console.groq.com) → **API Keys** → **Create API Key** (starts with `gsk_`)
-   - the **Secret topic name**, matching `arduino_secrets.h`
+3. Nothing to enter: the Groq key and topic name are built in, and the app connects to the bin by itself. An optional hidden setup page (add `#setup` to the address, or tap the big result text 5 times quickly) holds a Gemini key for Live mode and broker login details.
 
-   Tap **Done**. These are stored only on that phone, never in the public code.
 4. Tap **Start camera**, point it at the empty platform and tap **Set empty platform**.
 5. Tap **Connect bin**. The pill goes to **Bin online** when both the app and the Arduino are connected. The app reconnects by itself after drops and when it is reopened.
 
