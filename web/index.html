@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Smart Bin">
 <meta name="color-scheme" content="dark">
 <title>Smart Bin</title>
-<link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://api.groq.com" crossorigin>
 <link id="manifestLink" rel="manifest">
 <link id="iconLink" rel="icon">
 <style>
@@ -136,8 +136,12 @@
 <!-- Hidden setup page: only shown when the address ends with #setup -->
 <section id="setupCard" class="card" hidden>
   <h2>Setup (this phone only)</h2>
-  <label for="apiKey">Gemini API key
-    <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+  <label for="groqKey">Groq API key
+    <input id="groqKey" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_…">
+  </label>
+  <div class="hint">Free at console.groq.com → API Keys.</div>
+  <label for="apiKey">Gemini API key (only for Live mode, optional)
+    <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave empty">
   </label>
   <label for="topicPrefix">Secret topic name
     <input id="topicPrefix" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
@@ -203,8 +207,8 @@ const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is stil
 
 // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
 const CONFIG = {
-  photoModel: 'gemini-3.8-flash',
-  liveModel: 'gemini-3.8-live',
+  photoModel: 'qwen/qwen3.8-27b',   // Groq vision model used for every photo
+  liveModel: 'gemini-3.8-live',     // Live mode only (off), uses the Gemini key
   liveMode: false,
   sensitivity: 16,                // item detection threshold; lower is more sensitive
   mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
@@ -213,6 +217,7 @@ const CONFIG = {
 // Secrets, saved per phone on the hidden setup page (page address + #setup).
 // They are never written in this file because the file is public.
 const DEFAULTS = {
+  groqKey: '',
   apiKey: '',
   topicPrefix: '',
   mqttUser: '',
@@ -584,7 +589,7 @@ async function toggleCamera() {
     });
     detectTimer = setInterval(detectTick, DETECT_MS);
     requestWakeLock();
-    warmUpGemini();
+    warmUpAi();
     log('Camera started (' + video.videoWidth + '×' + video.videoHeight + ').');
     if (!emptyFrame) setState('Clear the platform and tap Set empty platform.');
   } catch (e) {
@@ -733,80 +738,84 @@ function parseCategory(text) {
   return unique.length === 1 ? unique[0] : null;
 }
 
-// Thinking makes answers slow, so ask for the lowest level the model accepts.
-// If a level is rejected, step to the next one and remember it.
-const THINKING_LEVELS = ['medium', 'low', null];
-let thinkingIndex = 0;
+// ---------------- Photo mode (Groq) ----------------
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+// Optional request settings. If Groq rejects one for this model, it is dropped and remembered.
+const groqOptions = {
+  response_format: { type: 'json_object' },  // answer must be JSON
+  reasoning_format: 'hidden',                 // think, but return only the answer
+  temperature: 0.2,
+};
 
 async function classifyPhoto() {
+  if (!settings.groqKey) throw new Error('This phone is not set up yet (no Groq API key).');
   const image = grabJpeg(768, 0.85);
-  for (;;) {
-    const level = THINKING_LEVELS[thinkingIndex];
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      return await requestPhoto(image, level);
+      return await requestGroq(image);
     } catch (e) {
-      if (level === null || !/thinking/i.test(e.message)) throw e;
-      thinkingIndex++;
-      log('Model rejected thinking level "' + level + '", trying the next one.');
+      if (e.retryAfter && attempt === 0 && e.retryAfter <= 20) {
+        log('Groq free limit reached, waiting ' + e.retryAfter + ' s…');
+        setActivity('Free limit reached, waiting ' + e.retryAfter + ' s…');
+        await sleep(e.retryAfter * 1000);
+        continue;
+      }
+      const rejected = Object.keys(groqOptions).find(k => e.message.includes(k));
+      if (!rejected) throw e;
+      delete groqOptions[rejected];
+      log('Groq does not accept "' + rejected + '" for this model, sending without it.');
     }
   }
+  throw new Error('Groq request failed.');
 }
 
-// Opens the connection to Gemini ahead of time so the first answer does not
-// also pay for the connection setup.
-function warmUpGemini() {
-  if (!settings.apiKey) return;
-  const model = settings.photoModel.trim().replace(/^models\//, '');
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model), {
-    headers: { 'x-goog-api-key': settings.apiKey },
-  }).catch(() => {});
-}
-
-async function requestPhoto(image, thinkingLevel) {
-  if (!settings.apiKey) throw new Error('This phone is not set up yet (no API key).');
-  const model = (settings.photoModel || CONFIG.photoModel).trim().replace(/^models\//, '');
+async function requestGroq(image) {
   const body = {
-    contents: [{
-      parts: [
-        { text: PHOTO_PROMPT },
-        { inline_data: { mime_type: 'image/jpeg', data: image } },
+    model: settings.photoModel,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: PHOTO_PROMPT },
+        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + image } },
       ],
     }],
+    ...groqOptions,
   };
-  body.generationConfig = {
-    responseMimeType: 'application/json',
-    responseSchema: {
-      type: 'OBJECT',
-      properties: {
-        item: { type: 'STRING' },
-        action: { type: 'STRING', enum: ['SORT', 'PREPARE'] },
-        category: { type: 'STRING', enum: ['BIO', 'METAL', 'ENERGY', 'MIX', 'EMPTY'] },
-        instruction: { type: 'STRING' },
-      },
-      required: ['item', 'action', 'category', 'instruction'],
-      propertyOrdering: ['item', 'action', 'category', 'instruction'],
-    },
-  };
-  if (thinkingLevel) body.generationConfig.thinkingConfig = { thinkingLevel };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
   try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
+    const res = await fetch(GROQ_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.apiKey },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + settings.groqKey },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
     const json = await res.json().catch(() => null);
-    if (!res.ok) throw new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
-    const parts = (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    return parts.map(p => p.text || '').join(' ').trim();
+    if (!res.ok) {
+      const err = new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
+      if (res.status === 429) err.retryAfter = Math.ceil(Number(res.headers.get('retry-after')) || 10);
+      throw err;
+    }
+    let text = (json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || '';
+    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim(); // in case reasoning comes back inline
+    const match = text.match(/\{[\s\S]*\}/);
+    return match ? match[0] : text;
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('Photo request timed out.');
     throw e;
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Opens the connection to Groq ahead of time so the first answer does not
+// also pay for the connection setup.
+function warmUpAi() {
+  if (!settings.groqKey) return;
+  fetch('https://api.groq.com/openai/v1/models', {
+    headers: { 'Authorization': 'Bearer ' + settings.groqKey },
+  }).catch(() => {});
 }
 
 async function classify() {
@@ -1123,13 +1132,14 @@ if (!settings.topicPrefix) {
   const random = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => (b % 36).toString(36)).join('');
   saveSetting('topicPrefix', 'smartbin-' + random);
 }
-for (const name of ['apiKey', 'topicPrefix', 'mqttUser', 'mqttPass']) {
+for (const name of ['groqKey', 'apiKey', 'topicPrefix', 'mqttUser', 'mqttPass']) {
   const input = $(name);
   input.value = settings[name];
   input.addEventListener('change', () => {
     saveSetting(name, input.value.trim());
     log('Setup saved.');
     if (name === 'apiKey') restartLive();
+    if (name === 'groqKey') warmUpAi();
     else if (bin.ws) bin.ws.close(); // reconnects with the new settings
   });
 }
@@ -1161,7 +1171,7 @@ $('setupDone').addEventListener('click', () => {
   showSetup();
 });
 showSetup();
-if (!settings.apiKey) log('This phone is not set up yet.');
+if (!settings.groqKey) log('This phone is not set up yet (no Groq API key).');
 
 // Installable with Add to Home screen: build the manifest in place (single-file app).
 (function setupManifest() {

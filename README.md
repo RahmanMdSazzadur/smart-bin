@@ -1,6 +1,6 @@
 # Smart Bin
 
-A trash bin that sorts each item into **Energy**, **Mix**, **Bio** or **Metal**. A phone camera looks at the item, a Gemini vision model names the category, and the phone tells the Arduino over **Wi-Fi** which bin to spill it into.
+A trash bin that sorts each item into **Energy**, **Mix**, **Bio** or **Metal**. A phone camera looks at the item, a vision model on **Groq** (free plan) names the category, and the phone tells the Arduino over **Wi-Fi** which bin to spill it into.
 
 ```
 web/index.html                            Phone web app
@@ -70,7 +70,7 @@ A free public broker comes with no uptime guarantee. If it is down, `broker.emqx
 1. Open the URL in **Safari on iPhone** (iOS 16.4 or newer) or **Chrome on Android**, and allow the camera when asked.
 2. Recommended on iPhone: **Share → Add to Home Screen**, then always open it from that icon. Safari can erase saved settings for websites you haven't opened for 7 days, but not for Home Screen apps. On Android: Chrome menu → **Add to Home screen**.
 3. Open the **hidden setup page**: add `#setup` to the end of the address, or **tap the big result text (—) 5 times quickly**. The tap works in a Home Screen app, which has no address bar. Enter:
-   - a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
+   - a **Groq API key**: free at [console.groq.com](https://console.groq.com) → **API Keys** → **Create API Key** (starts with `gsk_`)
    - the **Secret topic name**, matching `arduino_secrets.h`
 
    Tap **Done**. These are stored only on that phone, never in the public code.
@@ -84,7 +84,8 @@ Place an item. When it has been still for about a second, the app classifies it,
 Models, Live mode, sensitivity and the broker host are fixed in the `CONFIG` block near the top of the `<script>` in `web/index.html`. Nobody can change them from the page. To change one, edit `CONFIG` and push to GitHub.
 
 - **Sensitivity:** the line under the result shows `change X / threshold`. Set `sensitivity` a little above the `change` value you see with an empty platform.
-- **Live mode:** set `liveMode: true` to use a streaming Gemini Live session instead of single photos. If it gives no answer within 8 seconds, or the socket is closed, the app falls back to photo mode. Check that `liveModel` is one your key can use.
+- **Photo model:** `photoModel` is the Groq vision model. On the free plan, Groq allows roughly 3–4 items a minute; when the limit is hit, the app waits and tries again.
+- **Live mode:** needs a Gemini API key on the setup page. Set `liveMode: true` to use a streaming Gemini Live session instead of single photos. If it gives no answer within 8 seconds, or the socket is closed, the app falls back to photo mode. Check that `liveModel` is one your key can use.
 
 ## Test plan
 
