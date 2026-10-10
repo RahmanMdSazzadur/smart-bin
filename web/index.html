@@ -137,7 +137,7 @@
 <!-- Hidden setup page: only shown when the address ends with #setup -->
 <section id="setupCard" class="card" hidden>
   <h2>Setup (this device only, optional)</h2>
-  <label for="apiKey">Gemini API key (only for Live mode, optional)
+  <label for="apiKey">Gemini API key (this device; used when none is built in)
     <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave empty">
   </label>
   <label for="mqttUser">Broker user (optional)
@@ -200,15 +200,17 @@ const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is stil
 
 // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
 const CONFIG = {
-  geminiModel: 'gemini-3.8-flash',  // tried first for every photo
-  photoModel: 'qwen/qwen3.8-27b',   // Groq backup, used when Gemini is out of free quota or fails
+  // Tried in this order for every photo. Each model has its own free daily allowance;
+  // when one runs out the next is used, and Groq (photoModel) comes last.
+  geminiModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'],
+  photoModel: 'qwen/qwen3.8-27b',   // Groq backup, used when every Gemini model is out of quota or fails
   liveModel: 'gemini-3.8-live',     // Live mode only (off), uses the Gemini key
   liveMode: false,
   sensitivity: 16,                // item detection threshold; lower is more sensitive
   mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
   // Built in so every device works without setup. This file is public, so anyone can
   // read these. Split only to avoid automatic leak scanners, not to hide them.
-  geminiKey: '',   // empty = Groq only
+  geminiKey: '',   // paste your Gemini key between the quotes; empty = Groq only
   groqKey: ['gsk_', 'KHWd6JHrX1I4pPux', 'qnkyWGdyb3FYKz5c', '69enHmI3Gg0QGrzsXxys'].join(''),
   topicPrefix: 'smartbin-b0p1r0mw5c', // must match SECRET_TOPIC_PREFIX in arduino_secrets.h
 };
@@ -263,7 +265,9 @@ for (const name of Object.keys(DEFAULTS)) {
     settings[name] = DEFAULTS[name];
   }
 }
-if (!settings.apiKey) settings.apiKey = settings.geminiKey; // Live mode uses the built-in Gemini key
+// One Gemini key for photos and Live mode: the built-in one, or the one saved on this device.
+if (!settings.geminiKey) settings.geminiKey = settings.apiKey;
+if (!settings.apiKey) settings.apiKey = settings.geminiKey;
 function saveSetting(name, value) {
   settings[name] = value;
   try {
@@ -747,40 +751,41 @@ const PHOTO_SCHEMA = {
   required: ['item', 'action', 'category', 'instruction'],
   propertyOrdering: ['item', 'action', 'category', 'instruction'],
 };
-let geminiThinking = 'low';   // dropped if the model rejects it
-let geminiPausedUntil = 0;    // while Gemini is out of quota or failing, photos go to Groq
+const geminiPausedUntil = {};   // per model: while out of quota or failing, skip it
+const geminiNoThinking = new Set(); // models that reject the thinking setting
 
 async function classifyPhoto() {
   const image = grabJpeg(768, 0.85);
-  if (settings.geminiKey && Date.now() >= geminiPausedUntil) {
-    try {
-      setActivity('Asking Gemini…');
-      return { text: await classifyGemini(image), via: 'gemini' };
-    } catch (e) {
-      // Out of free quota: wait as long as Google says. Other errors: try Gemini again later.
-      let pauseS = e.status === 429 ? (e.retrySecs || 60) : (e.status === 400 || e.status === 403 || e.status === 404 ? 600 : 30);
-      pauseS = Math.min(pauseS, 3600);
-      geminiPausedUntil = Date.now() + pauseS * 1000;
-      log((e.status === 429 ? 'Gemini free limit reached.' : 'Gemini failed: ' + e.message + '.') +
-        ' Using Groq for the next ' + (pauseS >= 120 ? Math.round(pauseS / 60) + ' min.' : pauseS + ' s.'));
+  if (settings.geminiKey) {
+    for (const model of settings.geminiModels) {
+      if (Date.now() < (geminiPausedUntil[model] || 0)) continue;
+      try {
+        setActivity('Asking ' + model + '…');
+        return { text: await classifyGemini(image, model), via: model };
+      } catch (e) {
+        // Out of free quota: skip it as long as Google says. Other errors: try it again later.
+        let pauseS = e.status === 429 ? (e.retrySecs || 60) : (e.status === 400 || e.status === 403 || e.status === 404 ? 600 : 30);
+        pauseS = Math.min(pauseS, 3600);
+        geminiPausedUntil[model] = Date.now() + pauseS * 1000;
+        log(model + (e.status === 429 ? ' free limit reached.' : ' failed: ' + e.message + '.') +
+          ' Skipping it for ' + (pauseS >= 120 ? Math.round(pauseS / 60) + ' min.' : pauseS + ' s.'));
+      }
     }
   }
   return { text: await classifyGroq(image), via: 'groq' };
 }
 
-async function classifyGemini(image) {
+async function classifyGemini(image, model) {
   try {
-    return await requestGemini(image);
+    return await requestGemini(image, model);
   } catch (e) {
-    if (!geminiThinking || !/thinking/i.test(e.message)) throw e;
-    geminiThinking = null;
-    log('Gemini does not accept the thinking setting, sending without it.');
-    return requestGemini(image);
+    if (geminiNoThinking.has(model) || !/thinking/i.test(e.message)) throw e;
+    geminiNoThinking.add(model);
+    return requestGemini(image, model);
   }
 }
 
-async function requestGemini(image) {
-  const model = settings.geminiModel.trim().replace(/^models\//, '');
+async function requestGemini(image, model) {
   const body = {
     contents: [{
       parts: [
@@ -790,9 +795,9 @@ async function requestGemini(image) {
     }],
     generationConfig: { responseMimeType: 'application/json', responseSchema: PHOTO_SCHEMA },
   };
-  if (geminiThinking) body.generationConfig.thinkingConfig = { thinkingLevel: geminiThinking };
+  if (!geminiNoThinking.has(model)) body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+  const timer = setTimeout(() => ctrl.abort(), 15000);
   try {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
       method: 'POST',
@@ -945,7 +950,7 @@ async function requestGroq(image) {
 // also pay for the connection setup.
 function warmUpAi() {
   if (settings.geminiKey) {
-    fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(settings.geminiModel), {
+    fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(settings.geminiModels[0]), {
       headers: { 'x-goog-api-key': settings.geminiKey },
     }).catch(() => {});
   }
@@ -1270,7 +1275,10 @@ for (const name of ['apiKey', 'mqttUser', 'mqttPass']) {
   input.addEventListener('change', () => {
     saveSetting(name, input.value.trim());
     log('Setup saved.');
-    if (name === 'apiKey') restartLive();
+    if (name === 'apiKey') {
+      if (!CONFIG.geminiKey) settings.geminiKey = settings.apiKey;
+      restartLive();
+    }
     else if (bin.ws) bin.ws.close(); // reconnects with the new settings
   });
 }
