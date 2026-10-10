@@ -111,6 +111,7 @@
     <div id="placeholder" class="placeholder">Camera off</div>
   </div>
   <div id="result" class="result">—</div>
+  <div id="itemName" class="state"></div>
   <div id="state" class="state">Start the camera.</div>
   <div class="row2">
     <button id="emptyBtn" class="btn">Set empty platform</button>
@@ -168,7 +169,19 @@ const MQTT_KEEPALIVE_S = 60;
 const MQTT_PING_MS = 30000;
 const MQTT_RECONNECT_MS = 3000;
 
-const PROMPT = 'The photo shows one item of household waste lying on a platform. Sort it by Finnish household rules into exactly one of: BIO (food scraps, peels, coffee grounds, paper tissue), METAL (cans, foil, metal lids, small metal objects), ENERGY (plastic packaging, wrappers, dirty cardboard and other burnable packaging), MIX (everything else, such as ceramics, hygiene products, mixed materials). If the platform is empty answer EMPTY. Answer with that single word only.';
+// Sorting rules shared by photo mode and live mode.
+const PROMPT = [
+  'You sort household waste for a bin in Finland that has exactly four compartments: BIO, METAL, ENERGY and MIX.',
+  'The camera looks down at a platform. Ignore the platform, the background, shadows and any hands. Look only at the waste item lying on the platform. If there are several items, sort the largest one.',
+  'First identify exactly what the item is and what it is mainly made of. Then choose the compartment with these rules:',
+  'BIO (biowaste): food leftovers, fruit and vegetable peels and cores, bread, rice, pasta, meat, fish, bones, eggshells, coffee grounds and paper coffee filters, tea bags, used paper napkins, paper towels and tissues, small wooden items like toothpicks, ice cream sticks and chopsticks, cut flowers and plants.',
+  'METAL: anything mainly made of metal. Drink cans and food tins, aluminium foil, aluminium trays and tealight cups, metal lids, jar lids and bottle caps, empty aerosol cans, cutlery, keys, screws, nails, coins, metal pots and pans, wire.',
+  'ENERGY (burnable waste): plastic of any kind and paper or cardboard. Plastic bags, plastic film and wrappers, chip and candy wrappers, plastic bottles, cups and lids, yogurt and butter tubs, plastic trays and boxes, styrofoam, straws, plastic cutlery, pens, toothbrushes, plastic toys, rubber, paper cups, milk and juice cartons, pizza boxes, paper, cardboard, receipts, envelopes, egg cartons.',
+  'MIX (mixed waste): everything that does not fit the others. Ceramics, porcelain, drinking glasses and broken glass, glass jars and bottles, mirrors, diapers, sanitary pads, cotton swabs, cotton pads, wet wipes, cigarette butts, chewing gum, vacuum cleaner bags, sweepings, cat litter, textiles and clothes, items made of several materials glued together that cannot be separated.',
+  'Tips: food inside packaging counts as the packaging. A coated paper cup or carton is ENERGY. Foil-lined chip bags are ENERGY. A plastic bottle with a metal cap is ENERGY. Paper with food on it is BIO only if it is a napkin, towel or tissue; otherwise ENERGY.',
+  'If there is no item on the platform, the category is EMPTY.',
+].join('\n');
+const PHOTO_PROMPT = PROMPT + '\nReply as JSON with "item" (a short name of the item and its material, for example "aluminium drink can") and "category" (BIO, METAL, ENERGY, MIX or EMPTY).';
 const LIVE_PROMPT = PROMPT + ' You are watching a live camera above the platform. Stay silent. Only when you are told an item has been placed, call the sort_item function once with the category. Never answer in speech.';
 const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
 
@@ -250,6 +263,9 @@ const stateEl = $('state');
 function setPill(el, text, state) {
   el.textContent = text;
   el.dataset.state = state || '';
+}
+function showItemName(text) {
+  $('itemName').textContent = text || '';
 }
 function showResult(word) {
   resultEl.textContent = word || '—';
@@ -702,11 +718,11 @@ function parseCategory(text) {
 
 // Thinking makes answers slow, so ask for the lowest level the model accepts.
 // If a level is rejected, step to the next one and remember it.
-const THINKING_LEVELS = ['minimal', 'low', null];
+const THINKING_LEVELS = ['low', null];
 let thinkingIndex = 0;
 
 async function classifyPhoto() {
-  const image = grabJpeg(384, 0.7);
+  const image = grabJpeg(768, 0.85);
   for (;;) {
     const level = THINKING_LEVELS[thinkingIndex];
     try {
@@ -735,12 +751,24 @@ async function requestPhoto(image, thinkingLevel) {
   const body = {
     contents: [{
       parts: [
-        { text: PROMPT },
+        { text: PHOTO_PROMPT },
         { inline_data: { mime_type: 'image/jpeg', data: image } },
       ],
     }],
   };
-  if (thinkingLevel) body.generationConfig = { thinkingConfig: { thinkingLevel } };
+  body.generationConfig = {
+    responseMimeType: 'application/json',
+    responseSchema: {
+      type: 'OBJECT',
+      properties: {
+        item: { type: 'STRING' },
+        category: { type: 'STRING', enum: ['BIO', 'METAL', 'ENERGY', 'MIX', 'EMPTY'] },
+      },
+      required: ['item', 'category'],
+      propertyOrdering: ['item', 'category'],
+    },
+  };
+  if (thinkingLevel) body.generationConfig.thinkingConfig = { thinkingLevel };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
   try {
@@ -785,12 +813,21 @@ async function processItem() {
   }
   busy = true;
   showResult('…');
+  showItemName('');
   try {
     const t0 = performance.now();
     const { text, via } = await classify();
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
-    const cat = parseCategory(text);
-    log('Answer (' + via + ', ' + secs + ' s): "' + text + '" → ' + (cat || 'UNSURE'));
+    let cat = null, item = '';
+    try {
+      const json = JSON.parse(text);
+      item = String(json.item || '');
+      cat = parseCategory(json.category);
+    } catch {
+      cat = parseCategory(text); // live mode answers with the category word only
+    }
+    showItemName(item);
+    log('Answer (' + via + ', ' + secs + ' s): ' + (item ? item + ' → ' : '"' + text + '" → ') + (cat || 'UNSURE'));
     if (cat === 'EMPTY') {
       showResult('');
       if (cameraReady()) saveEmptyFrame(false); // the scene is empty, so use it as the new empty frame
