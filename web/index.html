@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Smart Bin">
 <meta name="color-scheme" content="dark">
 <title>Smart Bin</title>
+<link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
 <link id="manifestLink" rel="manifest">
 <link id="iconLink" rel="icon">
 <style>
@@ -190,10 +191,10 @@ const DEFAULTS = {
   binAuto: false,
 };
 
-const DETECT_MS = 250;
+const DETECT_MS = 200;
 const SMALL_W = 32, SMALL_H = 24;
 const STILL_LIMIT = 5;        // max mean difference from previous frame to count as still
-const STILL_SAMPLES = 3;      // still samples in a row before triggering (about 0.75 s)
+const STILL_SAMPLES = 2;      // still samples in a row before triggering (about 0.4 s)
 const EMPTY_FOLLOW = 0.05;    // how fast the empty frame follows slow lighting changes
 const REBASE_MS = 1500;       // re-save empty frame this long after a sort
 const LIVE_WAIT_MS = 8000;
@@ -550,6 +551,7 @@ async function toggleCamera() {
     });
     detectTimer = setInterval(detectTick, DETECT_MS);
     requestWakeLock();
+    warmUpGemini();
     log('Camera started (' + video.videoWidth + '×' + video.videoHeight + ').');
     if (!emptyFrame) setState('Clear the platform and tap Set empty platform.');
   } catch (e) {
@@ -698,23 +700,36 @@ function parseCategory(text) {
   return unique.length === 1 ? unique[0] : null;
 }
 
-// Thinking makes answers slow, so ask for the lowest level. If the model does not
-// accept that setting, retry once without it and stop sending it.
-let useLowThinking = true;
+// Thinking makes answers slow, so ask for the lowest level the model accepts.
+// If a level is rejected, step to the next one and remember it.
+const THINKING_LEVELS = ['minimal', 'low', null];
+let thinkingIndex = 0;
 
 async function classifyPhoto() {
-  const image = grabJpeg(512, 0.75);
-  try {
-    return await requestPhoto(image, useLowThinking);
-  } catch (e) {
-    if (!useLowThinking || !/thinking/i.test(e.message)) throw e;
-    useLowThinking = false;
-    log('Model does not accept the low-thinking setting, sending without it.');
-    return requestPhoto(image, false);
+  const image = grabJpeg(384, 0.7);
+  for (;;) {
+    const level = THINKING_LEVELS[thinkingIndex];
+    try {
+      return await requestPhoto(image, level);
+    } catch (e) {
+      if (level === null || !/thinking/i.test(e.message)) throw e;
+      thinkingIndex++;
+      log('Model rejected thinking level "' + level + '", trying the next one.');
+    }
   }
 }
 
-async function requestPhoto(image, lowThinking) {
+// Opens the connection to Gemini ahead of time so the first answer does not
+// also pay for the connection setup.
+function warmUpGemini() {
+  if (!settings.apiKey) return;
+  const model = settings.photoModel.trim().replace(/^models\//, '');
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model), {
+    headers: { 'x-goog-api-key': settings.apiKey },
+  }).catch(() => {});
+}
+
+async function requestPhoto(image, thinkingLevel) {
   if (!settings.apiKey) throw new Error('This phone is not set up yet (no API key).');
   const model = (settings.photoModel || CONFIG.photoModel).trim().replace(/^models\//, '');
   const body = {
@@ -725,7 +740,7 @@ async function requestPhoto(image, lowThinking) {
       ],
     }],
   };
-  if (lowThinking) body.generationConfig = { thinkingConfig: { thinkingLevel: 'low' } };
+  if (thinkingLevel) body.generationConfig = { thinkingConfig: { thinkingLevel } };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
   try {
