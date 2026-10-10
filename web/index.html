@@ -1135,6 +1135,7 @@ if (!settings.topicPrefix) {
 for (const name of ['groqKey', 'apiKey', 'topicPrefix', 'mqttUser', 'mqttPass']) {
   const input = $(name);
   input.value = settings[name];
+  input.addEventListener('input', () => saveSetting(name, input.value.trim())); // save while typing
   input.addEventListener('change', () => {
     saveSetting(name, input.value.trim());
     log('Setup saved.');
