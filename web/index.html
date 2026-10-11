@@ -612,8 +612,8 @@
 
   <section class="card">
     <h2>Admin</h2>
-    <button id="lockAdmin" class="btn">Lock admin on this device</button>
-    <div class="hint">After locking, switching to Admin needs the PIN again.</div>
+    <button id="lockAdmin" class="btn">Lock admin now</button>
+    <div class="hint">Admin also locks by itself when you leave the app, switch tabs or lock the screen.</div>
   </section>
 
   <section class="card">
@@ -690,7 +690,7 @@
     const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
 
     // Set automatically on every commit by .githooks/pre-commit; must match web/version.json.
-    const APP_VERSION = '20261011094100';
+    const APP_VERSION = '20261011094527';
 
     // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
     const CONFIG = {
@@ -1928,11 +1928,26 @@
     showSetup();
 
     // ---------------- Admin PIN ----------------
-    // Admin needs the PIN once per device; the device then stays unlocked until
-    // "Lock admin" is pressed. Devices that are not unlocked open on the dashboard.
+    // Admin needs the PIN every time. It locks itself as soon as the app is left
+    // (another app or tab, screen locked, page closed) or "Lock admin" is pressed,
+    // and the app then shows the dashboard. Unlocking is never remembered.
     let adminUnlocked = false;
-    try { adminUnlocked = localStorage.getItem('smartbin.adminUnlocked') === settings.adminPinHash; } catch { /* locked */ }
+    try { localStorage.removeItem('smartbin.adminUnlocked'); } catch { /* from older versions */ }
     let pinEntry = '';
+
+    function lockAdmin(reason) {
+      const wasUnlocked = adminUnlocked;
+      adminUnlocked = false;
+      closePinPad();
+      showView('dashboard');
+      if (wasUnlocked) log('Admin locked' + (reason ? ' (' + reason + ')' : '') + '.');
+    }
+    // Only "hidden" counts as leaving: tapping inside the dashboard frame moves focus
+    // but keeps the page visible, so focus changes are ignored on purpose.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') lockAdmin('app left');
+    });
+    window.addEventListener('pagehide', () => lockAdmin('page closed'));
 
     async function sha256Hex(text) {
       const bytes = await crypto.subtle.digest('SHA-256', encoder.encode(text));
@@ -1961,10 +1976,9 @@
       const ok = (await sha256Hex('smartbin-admin:' + pinEntry)) === settings.adminPinHash;
       if (ok) {
         adminUnlocked = true;
-        try { localStorage.setItem('smartbin.adminUnlocked', settings.adminPinHash); } catch { /* unlocked for now */ }
         closePinPad();
         showView('admin');
-        log('Admin unlocked on this device.');
+        log('Admin unlocked. It locks again when you leave the app.');
       } else {
         pinEntry = '';
         $('pinMsg').textContent = 'Wrong PIN, try again';
@@ -1982,11 +1996,7 @@
       else if (e.key === 'Backspace') pinKey('back');
       else if (e.key === 'Escape') pinKey('cancel');
     });
-    $('lockAdmin').addEventListener('click', () => {
-      adminUnlocked = false;
-      try { localStorage.removeItem('smartbin.adminUnlocked'); } catch { /* locked for now */ }
-      showView('dashboard');
-    });
+    $('lockAdmin').addEventListener('click', () => lockAdmin('locked by hand'));
 
     // ---------------- Dashboard | Admin switch ----------------
     // ?view=dashboard opens on the dashboard; otherwise the last view used on this device.
