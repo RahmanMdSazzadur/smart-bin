@@ -428,6 +428,118 @@
     body.view-dash:not(.cam-on) #camCard {
       display: none;
     }
+
+    /* ---------- Admin PIN pad ---------- */
+    #pinPad {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background: rgba(10, 11, 13, .55);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+    }
+
+    #pinPad[hidden] {
+      display: none;
+    }
+
+    .pin-card {
+      width: min(320px, 100%);
+      background: #fff;
+      color: #1d1d1f;
+      border-radius: 26px;
+      padding: 26px 22px 18px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+    }
+
+    .pin-card h3 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .pin-card p {
+      margin: 4px 0 0;
+      font-size: 14px;
+      color: #6e6e73;
+      min-height: 20px;
+    }
+
+    .pin-card p.wrong {
+      color: #d64545;
+    }
+
+    .pin-dots {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin: 20px 0 22px;
+    }
+
+    .pin-dots span {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #c7c7cc;
+      transition: background .15s, border-color .15s;
+    }
+
+    .pin-dots span.on {
+      background: #1d1d1f;
+      border-color: #1d1d1f;
+    }
+
+    .pin-dots.shake {
+      animation: shake .4s;
+    }
+
+    .pin-keys {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .pin-keys button {
+      appearance: none;
+      border: 0;
+      height: 58px;
+      border-radius: 18px;
+      background: #f2f2f4;
+      color: #1d1d1f;
+      font: inherit;
+      font-size: 22px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .pin-keys button:active {
+      background: #e2e2e6;
+    }
+
+    .pin-keys button.plain {
+      background: transparent;
+      font-size: 15px;
+      color: #6e6e73;
+    }
+
+    @keyframes shake {
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .pin-card { background: #1b1d21; color: #f2f2f4; }
+      .pin-card p { color: #9a9ca3; }
+      .pin-dots span { border-color: #4a4d55; }
+      .pin-dots span.on { background: #f2f2f4; border-color: #f2f2f4; }
+      .pin-keys button { background: #262930; color: #f2f2f4; }
+      .pin-keys button:active { background: #33363e; }
+      .pin-keys button.plain { background: transparent; color: #9a9ca3; }
+    }
   </style>
 </head>
 
@@ -499,6 +611,12 @@
   </section>
 
   <section class="card">
+    <h2>Admin</h2>
+    <button id="lockAdmin" class="btn">Lock admin on this device</button>
+    <div class="hint">After locking, switching to Admin needs the PIN again.</div>
+  </section>
+
+  <section class="card">
     <h2>Log</h2>
     <ol id="log"></ol>
   </section>
@@ -513,6 +631,20 @@
     <button id="viewDash" type="button" aria-pressed="false">Dashboard</button>
     <button id="viewAdmin" type="button" aria-pressed="true">Admin</button>
   </nav>
+
+  <div id="pinPad" role="dialog" aria-modal="true" aria-labelledby="pinTitle" hidden>
+    <div class="pin-card">
+      <h3 id="pinTitle">Admin PIN</h3>
+      <p id="pinMsg">Enter the 4-digit PIN</p>
+      <div id="pinDots" class="pin-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="pin-keys">
+        <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
+        <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
+        <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button>
+        <button type="button" class="plain" data-key="cancel">Cancel</button><button type="button" data-key="0">0</button><button type="button" class="plain" data-key="back" aria-label="Delete">⌫</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     'use strict';
@@ -567,6 +699,9 @@
       liveMode: false,
       sensitivity: 16,                // item detection threshold; lower is more sensitive
       binCapacity: 25,                // items per compartment before it counts as full (no fill sensor)
+      // SHA-256 of 'smartbin-admin:' + PIN. Default PIN 2468. To change it, run in a terminal:
+      //   python3 -c "import hashlib;print(hashlib.sha256(b'smartbin-admin:1234').hexdigest())"
+      adminPinHash: 'c403c85aaf7b05e7bd369efaee110cc3f2863a847194d46b02598c3b8ad17a72',
       mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
       // Built in so every device works without setup. This file is public, so anyone can
       // read these. Split only to avoid automatic leak scanners, not to hide them.
@@ -1789,9 +1924,74 @@
     });
     showSetup();
 
+    // ---------------- Admin PIN ----------------
+    // Admin needs the PIN once per device; the device then stays unlocked until
+    // "Lock admin" is pressed. Devices that are not unlocked open on the dashboard.
+    let adminUnlocked = false;
+    try { adminUnlocked = localStorage.getItem('smartbin.adminUnlocked') === settings.adminPinHash; } catch { /* locked */ }
+    let pinEntry = '';
+
+    async function sha256Hex(text) {
+      const bytes = await crypto.subtle.digest('SHA-256', encoder.encode(text));
+      return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
+    }
+    function drawPin() {
+      $('pinDots').querySelectorAll('span').forEach((dot, i) => dot.classList.toggle('on', i < pinEntry.length));
+    }
+    function openPinPad() {
+      pinEntry = '';
+      drawPin();
+      $('pinMsg').textContent = 'Enter the 4-digit PIN';
+      $('pinMsg').classList.remove('wrong');
+      $('pinPad').hidden = false;
+    }
+    function closePinPad() {
+      $('pinPad').hidden = true;
+      pinEntry = '';
+    }
+    async function pinKey(key) {
+      if (key === 'cancel') return closePinPad();
+      if (key === 'back') pinEntry = pinEntry.slice(0, -1);
+      else if (/^\d$/.test(key) && pinEntry.length < 4) pinEntry += key;
+      drawPin();
+      if (pinEntry.length < 4) return;
+      const ok = (await sha256Hex('smartbin-admin:' + pinEntry)) === settings.adminPinHash;
+      if (ok) {
+        adminUnlocked = true;
+        try { localStorage.setItem('smartbin.adminUnlocked', settings.adminPinHash); } catch { /* unlocked for now */ }
+        closePinPad();
+        showView('admin');
+        log('Admin unlocked on this device.');
+      } else {
+        pinEntry = '';
+        $('pinMsg').textContent = 'Wrong PIN, try again';
+        $('pinMsg').classList.add('wrong');
+        $('pinDots').classList.remove('shake');
+        void $('pinDots').offsetWidth; // restart the animation
+        $('pinDots').classList.add('shake');
+        setTimeout(drawPin, 250);
+      }
+    }
+    $('pinPad').querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', () => pinKey(b.dataset.key)));
+    document.addEventListener('keydown', e => {
+      if ($('pinPad').hidden) return;
+      if (/^\d$/.test(e.key)) pinKey(e.key);
+      else if (e.key === 'Backspace') pinKey('back');
+      else if (e.key === 'Escape') pinKey('cancel');
+    });
+    $('lockAdmin').addEventListener('click', () => {
+      adminUnlocked = false;
+      try { localStorage.removeItem('smartbin.adminUnlocked'); } catch { /* locked for now */ }
+      showView('dashboard');
+    });
+
     // ---------------- Dashboard | Admin switch ----------------
     // ?view=dashboard opens on the dashboard; otherwise the last view used on this device.
     function showView(view) {
+      if (view === 'admin' && !adminUnlocked) {
+        openPinPad();
+        return;
+      }
       const dash = view === 'dashboard';
       if (dash && !$('dashFrame').src) $('dashFrame').src = 'dashboard.html';
       $('dashView').hidden = !dash;
@@ -1805,7 +2005,7 @@
     {
       let start = new URLSearchParams(location.search).get('view');
       if (!start) { try { start = localStorage.getItem('smartbin.view'); } catch { /* default */ } }
-      showView(start === 'dashboard' ? 'dashboard' : 'admin');
+      showView(start === 'dashboard' || !adminUnlocked ? 'dashboard' : 'admin');
     }
 
     // Installable with Add to Home screen: build the manifest in place (single-file app).
