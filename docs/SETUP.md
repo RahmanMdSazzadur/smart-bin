@@ -30,6 +30,7 @@ The public broker has no passwords, so the topics start with a topic name (`topi
 | `<secret>/cmd` | phone → bin | `ENERGY`, `MIX`, `BIO`, `METAL`, `turn`, `spill` |
 | `<secret>/status` | bin → phone | `BUSY`, `DONE` |
 | `<secret>/online` | bin → phone | `ONLINE` / `OFFLINE` (retained, so the app sees it as soon as it connects) |
+| `<secret>/fill/bio` | bin → phone | Bio fill level `0`–`100` (retained). Set `BIN_EMPTY_CM` and `BIN_FULL_CM` in the sketch to your compartment. Other compartments can use `fill/energy`, `fill/mix`, `fill/metal`. |
 
 A free public broker comes with no uptime guarantee. If it is down, `broker.emqx.io` works the same way: enter `wss://broker.emqx.io:8084/mqtt` as the broker host in the app, and `broker.emqx.io` in `arduino_secrets.h`.
 
@@ -40,6 +41,7 @@ A free public broker comes with no uptime guarantee. If it is down, `broker.emqx
 | D6      | Base servo (continuous rotation), turns the carousel      |
 | D7, D5  | Joint servos 1 and 2 (continuous rotation), tilt to spill |
 | D10, D9 | HC-SR04 homing sensor (TRIG, ECHO)                        |
+| D11, D12 | HC-SR04 fill sensor above the Bio compartment (TRIG, ECHO) |
 
 **Power:** run the servos from a separate 6 V battery. Connect the battery's ground to the Arduino GND. Never power servos from the Arduino 5V pin.
 

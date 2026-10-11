@@ -96,6 +96,7 @@ The web app must run on an `https://` page, because browsers only allow the came
 **Bin**
 - 4-compartment carousel driven by a continuous-rotation servo; two servos tilt the platform to spill the item.
 - Ultrasonic homing sensor to find the start position.
+- **Live fill sensor** over the Bio compartment: the dashboard shows the real fill level and posts *"almost full"* (80 %), *"full"* (95 %) and *"emptied"* messages by itself.
 - Online/offline status reported through the broker (MQTT last will).
 
 ---
@@ -108,6 +109,7 @@ The web app must run on an `https://` page, because browsers only allow the came
 | Continuous-rotation servo (D6) | Turns the 4-section carousel |
 | 2 × continuous-rotation servos (D7, D5) | Tilt the platform to spill the item |
 | HC-SR04 ultrasonic sensor (D10 trig, D9 echo) | Homing: finds the start position |
+| HC-SR04 ultrasonic sensor (D11 trig, D12 echo) | Measures how full the Bio compartment is |
 | 6 V battery pack | Powers the servos (shared ground with the Arduino) |
 | Smartphone (iPhone or Android) | Camera, AI requests and on-site screen |
 
@@ -180,7 +182,7 @@ The simulation found two bugs, which we fixed:
 
 ## Limitations and future work
 
-- **Fill level is estimated** from the number of items (25 per compartment). An ultrasonic fill sensor per compartment would measure it.
+- **Only Bio has a fill sensor.** The other compartments estimate their fill level from the number of items (25 per compartment). The web app already accepts a sensor for any compartment (`<topic>/fill/energy`, `fill/mix`, `fill/metal`), so adding one only needs Arduino code.
 - **Homing happens once at power-up**, so small timing errors could add up over many sorts. Re-homing after every sort would remove this.
 - **Keys in the browser:** move AI calls behind a small server (for example a free serverless function) and use a private MQTT broker with logins.
 - **Rules are Finnish household rules.** They are written as plain text in the prompt, so they can be adapted to another country without code changes.

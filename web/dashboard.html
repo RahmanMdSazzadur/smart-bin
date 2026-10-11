@@ -190,7 +190,7 @@
 'use strict';
 
 // Set automatically on every commit by .githooks/pre-commit; must match web/version.json.
-const APP_VERSION = '20261011095608';
+const APP_VERSION = '20261011131914';
 
 // Must match CONFIG in index.html and arduino_secrets.h.
 const CONFIG = {
@@ -222,6 +222,10 @@ const $ = id => document.getElementById(id);
 let state = null;
 let online = null;
 let seenUpTo = 0; // newest message time already shown, so only new ones animate
+// Live fill levels (0–100) from fill sensors on the bin, per compartment, published by the
+// Arduino on <topic>/fill/<compartment>. A compartment without a sensor uses the item count.
+const realFill = {};
+const SENSOR_FULL = 95; // a sensor rarely reads exactly 100
 
 // ---------------- Rendering ----------------
 function timeAgo(t) {
@@ -246,17 +250,19 @@ function renderStatus() {
 function renderBins() {
   const cap = (state && state.capacity) || 25;
   $('bins').innerHTML = CATS.map(c => {
+    const sensed = realFill[c] !== undefined;
     const fill = state ? state.fill[c] || 0 : 0;
-    const pct = Math.min(100, Math.round(fill / cap * 100));
-    const level = pct >= 100 ? 'full' : pct >= 80 ? 'almost' : 'ok';
+    const pct = sensed ? Math.min(100, Math.round(realFill[c])) : Math.min(100, Math.round(fill / cap * 100));
+    const level = pct >= (sensed ? SENSOR_FULL : 100) ? 'full' : pct >= 80 ? 'almost' : 'ok';
     const badge = { ok: 'OK', almost: 'Almost full', full: 'Full' }[level];
     const today = state ? state.counts[c] || 0 : 0;
+    const todayText = today + ' item' + (today === 1 ? '' : 's') + ' today';
     return '<article class="card bin' + (level === 'full' ? ' full' : '') + '">' +
       '<div class="bin-top"><div class="bin-name">' + svg(ICONS[c], COLORS[c]) + NAMES[c] + '</div>' +
       '<span class="badge" data-level="' + level + '">' + badge + '</span></div>' +
       '<div class="bin-pct">' + pct + '<small>%</small></div>' +
       '<div class="bar"><span style="width:' + pct + '%;background:' + (level === 'full' ? 'var(--bad)' : COLORS[c]) + '"></span></div>' +
-      '<div class="bin-count">' + today + ' item' + (today === 1 ? '' : 's') + ' today</div>' +
+      '<div class="bin-count">' + (sensed ? 'Live sensor · ' : '') + todayText + '</div>' +
       '</article>';
   }).join('');
 }
@@ -400,7 +406,8 @@ function onData(chunk) {
 function onPacket(first, body) {
   const type = first >> 4;
   if (type === 2 && body[1] === 0) { // CONNACK
-    ws.send(mqttPacket(0x82, [0, 1, ...mqttString(topic('state')), 0, ...mqttString(topic('online')), 0]));
+    ws.send(mqttPacket(0x82, [0, 1, ...mqttString(topic('state')), 0, ...mqttString(topic('online')), 0,
+      ...mqttString(topic('fill/+')), 0]));
     clearInterval(pingTimer);
     pingTimer = setInterval(() => { if (ws && ws.readyState === 1) ws.send(new Uint8Array([0xc0, 0])); }, 30000);
   } else if (type === 3) { // PUBLISH
@@ -416,6 +423,14 @@ function onPacket(first, body) {
         state = JSON.parse(payload);
         renderAll();
       } catch { /* ignore a broken update */ }
+    } else if (name.startsWith(topic('fill/'))) {
+      const cat = name.slice(topic('fill/').length).toUpperCase();
+      const pct = payload.trim() === '' ? NaN : Number(payload);
+      if (CATS.includes(cat) && payload.trim() === '') { delete realFill[cat]; renderBins(); } // sensor removed
+      else if (CATS.includes(cat) && Number.isFinite(pct) && pct >= 0) { // -1 means the sensor got no echo
+        realFill[cat] = pct;
+        renderBins();
+      }
     }
   }
 }

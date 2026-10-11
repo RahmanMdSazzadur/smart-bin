@@ -694,7 +694,7 @@
     const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
 
     // Set automatically on every commit by .githooks/pre-commit; must match web/version.json.
-    const APP_VERSION = '20261011095608';
+    const APP_VERSION = '20261011131914';
 
     // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
     const CONFIG = {
@@ -967,6 +967,7 @@
           ...mqttString(topic('status')), 0,
           ...mqttString(topic('online')), 0,
           ...mqttString(topic('state')), 0, // newest dashboard numbers from any device
+          ...mqttString(topic('fill/+')), 0, // live fill sensors on the bin, e.g. fill/bio
         ]));
         clearInterval(bin.pingTimer);
         bin.pingTimer = setInterval(() => {
@@ -994,6 +995,10 @@
         if (payload === 'DONE' && bin.doneWaiter) bin.doneWaiter(true);
       } else if (name === topic('state')) {
         adoptState(payload);
+      } else if (name.startsWith(topic('fill/'))) {
+        const cat = name.slice(topic('fill/').length).toUpperCase();
+        if (payload === '') delete sensorFill[cat]; // sensor removed
+        else onSensorFill(cat, Number(payload));
       }
     }
 
@@ -1084,7 +1089,9 @@
       const name = item ? item.charAt(0).toUpperCase() + item.slice(1) : 'Item';
       addMessage('sorted', name + ' → ' + CAT_NAMES[cat] + '. Thank you!');
       const pct = stats.fill[cat] / settings.binCapacity;
-      if (pct >= 1 && stats.warned[cat] !== 'full') {
+      if (sensorFill[cat] !== undefined) {
+        // This compartment has a real fill sensor; its warnings come from onSensorFill.
+      } else if (pct >= 1 && stats.warned[cat] !== 'full') {
         stats.warned[cat] = 'full';
         addMessage('full', 'The ' + CAT_NAMES[cat] + ' bin is full. Please empty it.');
       } else if (pct >= 0.8 && !stats.warned[cat]) {
@@ -1100,6 +1107,43 @@
       addMessage('info', 'The ' + CAT_NAMES[cat] + ' bin has been emptied.');
       saveStats();
       log(CAT_NAMES[cat] + ' marked as emptied.');
+    }
+
+    // ---------------- Live fill sensors ----------------
+    // The Arduino publishes a compartment's fill level (0–100, or -1 for no echo) on
+    // <topic>/fill/<compartment>, e.g. fill/bio. The dashboard shows it directly; here the
+    // device running the camera turns it into messages, so they are posted only once.
+    const SENSOR_ALMOST = 80;  // %: "almost full"
+    const SENSOR_FULL = 95;    // %: "full" (a sensor rarely reads exactly 100)
+    const SENSOR_EMPTIED = 20; // %: a warned compartment that drops below this was emptied
+    const sensorFill = {};
+
+    function onSensorFill(cat, pct) {
+      if (!CATS.includes(cat) || !Number.isFinite(pct)) return;
+      if (pct < 0) {
+        log(CAT_NAMES[cat] + ' fill sensor: no echo.');
+        return;
+      }
+      const previous = sensorFill[cat];
+      sensorFill[cat] = pct;
+      if (previous === undefined || Math.abs(previous - pct) >= 5) log(CAT_NAMES[cat] + ' fill (sensor): ' + Math.round(pct) + '%');
+      if (!stream) return; // only the device at the bin posts messages
+
+      const warned = stats.warned[cat];
+      if (pct >= SENSOR_FULL && warned !== 'full') {
+        stats.warned[cat] = 'full';
+        addMessage('full', 'The ' + CAT_NAMES[cat] + ' bin is full. Please empty it.');
+        saveStats();
+      } else if (pct >= SENSOR_ALMOST && pct < SENSOR_FULL && !warned) {
+        stats.warned[cat] = 'almost';
+        addMessage('almost', 'The ' + CAT_NAMES[cat] + ' bin is almost full.');
+        saveStats();
+      } else if (pct < SENSOR_EMPTIED && warned) {
+        stats.fill[cat] = 0;
+        stats.warned[cat] = null;
+        addMessage('info', 'The ' + CAT_NAMES[cat] + ' bin has been emptied.');
+        saveStats();
+      }
     }
 
     function reportProblem(type, text) {

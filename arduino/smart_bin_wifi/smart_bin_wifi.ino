@@ -5,9 +5,10 @@
 // can send commands from anywhere.
 //
 // MQTT topics, where <name> is SECRET_TOPIC_PREFIX from arduino_secrets.h:
-//   <name>/cmd     phone -> bin   ENERGY, MIX, BIO, METAL, turn, spill
-//   <name>/status  bin -> phone   BUSY, DONE
-//   <name>/online  bin -> phone   ONLINE / OFFLINE (retained)
+//   <name>/cmd       phone -> bin   ENERGY, MIX, BIO, METAL, turn, spill
+//   <name>/status    bin -> phone   BUSY, DONE
+//   <name>/online    bin -> phone   ONLINE / OFFLINE (retained)
+//   <name>/fill/bio  bin -> phone   0-100, how full the BIO compartment is (retained)
 
 #include <Servo.h>
 #include <Arduino.h>
@@ -30,6 +31,14 @@ int echoPin = 9;
 long time;
 float distance;
 
+// Second ultrasonic sensor, mounted above the BIO compartment pointing down at the
+// trash pile. Separate pins and variables from the homing sensor above, so the two
+// readings never interfere with each other. ---------------- Added for fill sensing
+const int fillTrigPin = 11;
+const int fillEchoPin = 12;
+const float BIN_EMPTY_CM = 40.0;   // distance reading when BIO is empty (measure yours and adjust)
+const float BIN_FULL_CM  = 5.0;    // distance reading counted as "full" (measure yours and adjust)
+
 int home_status = 0;
 
 int tilt_angle = 200;
@@ -45,6 +54,7 @@ const int TURN_PAUSE_MS = 300;   // pause between turns
 const String CMD_TOPIC = String(SECRET_TOPIC_PREFIX) + "/cmd";
 const String STATUS_TOPIC = String(SECRET_TOPIC_PREFIX) + "/status";
 const String ONLINE_TOPIC = String(SECRET_TOPIC_PREFIX) + "/online";
+const String FILL_TOPIC = String(SECRET_TOPIC_PREFIX) + "/fill/bio";   // Added for fill sensing
 const int MQTT_PORT = 8883;      // TLS
 
 WiFiSSLClient net;
@@ -53,6 +63,9 @@ String pendingCommand = "";
 unsigned long lastConnectTry = 0;
 bool wifiWasConnected = false;
 bool brokerWasConnected = false;
+unsigned long lastFillCheck = 0;                  // Added for fill sensing
+const unsigned long FILL_CHECK_MS = 5000;         // how often to re-measure; no need to check every loop
+int lastFillPercent = -1;                         // -1 = not read yet, so the first good reading always publishes
 // -------------------------------------------------
 
 void one_section_turn(){
@@ -115,6 +128,43 @@ void notify(const String &msg) {
   Serial.println(msg);
   publish(STATUS_TOPIC, msg, false);
 }
+
+// ---------------- Added for fill sensing ----------------
+// Reads the fill sensor once. Returns 0-100, or -1 if the sensor gave no echo
+// (out of range, or not wired up yet) so a bad reading never gets published.
+int readFillPercentBio() {
+  digitalWrite(fillTrigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(fillTrigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(fillTrigPin, LOW);
+
+  unsigned long echoTime = pulseIn(fillEchoPin, HIGH, 30000); // 30 ms timeout, ~5 m max range
+  if (echoTime == 0) return -1;
+
+  float cm = echoTime * 0.0343 / 2;
+  float pct = (BIN_EMPTY_CM - cm) / (BIN_EMPTY_CM - BIN_FULL_CM) * 100;
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
+  return (int)pct;
+}
+
+// Checks the BIO fill level every FILL_CHECK_MS and publishes only when it changed,
+// so the broker and the web app aren't sent a new message on every single loop.
+void checkFillLevel() {
+  if (millis() - lastFillCheck < FILL_CHECK_MS) return;
+  lastFillCheck = millis();
+
+  int pct = readFillPercentBio();
+  if (pct < 0 || pct == lastFillPercent) return;
+  lastFillPercent = pct;
+
+  publish(FILL_TOPIC, String(pct), true);   // retained: a page opened later still sees the last value
+  Serial.print("BIO fill: ");
+  Serial.print(pct);
+  Serial.println("%");
+}
+// ----------------------------------------------------------
 
 // Called from mqtt.poll(). The command runs later in loop(), not inside the callback.
 void onMqttMessage(int size) {
@@ -231,6 +281,9 @@ void setup() {
 
   pinMode(trigPin, OUTPUT); // SETTING OUTPUT PIN
   pinMode(echoPin, INPUT); // SETTING INPUT PIN
+
+  pinMode(fillTrigPin, OUTPUT);   // Added for fill sensing
+  pinMode(fillEchoPin, INPUT);    // Added for fill sensing
 }
 
 void loop() {
@@ -259,6 +312,7 @@ void loop() {
   if (home_status == 1) {
     connectNetwork();
     mqtt.poll();
+    checkFillLevel();           // Added for fill sensing
     if (pendingCommand.length() > 0) {
       String cmd = pendingCommand;
       pendingCommand = "";
