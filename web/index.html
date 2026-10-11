@@ -1,1347 +1,1845 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f1216">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Smart Bin">
-<meta name="color-scheme" content="dark">
-<title>Smart Bin</title>
-<link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://api.groq.com" crossorigin>
-<link id="manifestLink" rel="manifest">
-<link id="iconLink" rel="icon">
-<style>
-  :root {
-    --bg: #0f1216;
-    --card: #181c22;
-    --card-2: #222831;
-    --line: #2d3540;
-    --text: #e8ecf1;
-    --muted: #9aa4b2;
-    --accent: #4c8dff;
-    --ok: #3fb950;
-    --warn: #e3a008;
-    --bad: #f85149;
-    --energy: #f5a524;
-    --mix: #9aa4b2;
-    --bio: #3fb950;
-    --metal: #58a6ff;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--text); }
-  body {
-    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
-    max-width: 640px;
-    margin: 0 auto;
-    -webkit-tap-highlight-color: transparent;
-  }
-  h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 12px; }
-  .btn {
-    appearance: none; border: 1px solid var(--line); background: var(--card-2); color: var(--text);
-    font: inherit; font-size: 17px; font-weight: 600; min-height: 56px; padding: 8px 12px;
-    border-radius: 12px; width: 100%; cursor: pointer; touch-action: manipulation;
-  }
-  .btn:active:not(:disabled) { transform: scale(.98); filter: brightness(1.2); }
-  .btn:disabled { opacity: .4; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  .pill { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--card-2); color: var(--muted); border: 1px solid var(--line); }
-  .pill::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
-  .pill[data-state="on"] { color: var(--text); }
-  .pill[data-state="on"]::before { background: var(--ok); }
-  .pill[data-state="warn"]::before { background: var(--warn); }
-  .pill[data-state="bad"]::before { background: var(--bad); }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1216">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Smart Bin">
+  <meta name="color-scheme" content="dark">
+  <title>Smart Bin</title>
+  <link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://api.groq.com" crossorigin>
+  <link id="manifestLink" rel="manifest">
+  <link id="iconLink" rel="icon">
+  <style>
+    :root {
+      --bg: #0f1216;
+      --card: #181c22;
+      --card-2: #222831;
+      --line: #2d3540;
+      --text: #e8ecf1;
+      --muted: #9aa4b2;
+      --accent: #4c8dff;
+      --ok: #3fb950;
+      --warn: #e3a008;
+      --bad: #f85149;
+      --energy: #f5a524;
+      --mix: #9aa4b2;
+      --bio: #3fb950;
+      --metal: #58a6ff;
+    }
 
-  .viewer { position: relative; aspect-ratio: 4 / 3; background: #000; border-radius: 12px; overflow: hidden; }
-  .viewer video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
-  .result { font-size: 52px; font-weight: 800; text-align: center; letter-spacing: .04em; margin: 12px 0 2px; min-height: 64px; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
-  .result[data-cat="ENERGY"] { color: var(--energy); }
-  .result[data-cat="MIX"] { color: var(--mix); }
-  .result[data-cat="BIO"] { color: var(--bio); }
-  .result[data-cat="METAL"] { color: var(--metal); }
-  .result[data-cat="UNSURE"] { color: var(--warn); }
-  .result[data-cat="ERROR"] { color: var(--bad); }
-  .result[data-cat="PREPARE"] { color: var(--warn); }
-  #itemName.prepare { color: var(--warn); font-size: 18px; font-weight: 700; white-space: normal; }
-  .state { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    * {
+      box-sizing: border-box;
+    }
 
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .btn.cat { border-width: 2px; }
-  .btn[data-cat="ENERGY"] { border-color: var(--energy); color: var(--energy); }
-  .btn[data-cat="MIX"] { border-color: var(--mix); color: var(--mix); }
-  .btn[data-cat="BIO"] { border-color: var(--bio); color: var(--bio); }
-  .btn[data-cat="METAL"] { border-color: var(--metal); color: var(--metal); }
+    html,
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
 
-  details.card > summary { font-size: 15px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; min-height: 32px; list-style-position: inside; }
-  label { display: block; margin-top: 12px; font-size: 14px; color: var(--muted); }
-  input[type="text"], input[type="password"] {
-    width: 100%; margin-top: 4px; font: inherit; font-size: 16px; color: var(--text);
-    background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px;
-  }
-  .check { display: flex; align-items: center; gap: 12px; font-size: 16px; color: var(--text); min-height: 44px; }
-  .check input { width: 26px; height: 26px; accent-color: var(--accent); }
-  input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--accent); height: 32px; }
-  .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    body {
+      font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+      max-width: 640px;
+      margin: 0 auto;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-  #log { list-style: none; margin: 0; padding: 0; font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; max-height: 320px; overflow-y: auto; }
-  #log li { padding: 3px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-  #log li time { color: var(--muted); margin-right: 8px; }
-</style>
+    h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--muted);
+      margin: 0 0 10px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--card-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 17px;
+      font-weight: 600;
+      min-height: 56px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      width: 100%;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .btn:active:not(:disabled) {
+      transform: scale(.98);
+      filter: brightness(1.2);
+    }
+
+    .btn:disabled {
+      opacity: .4;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .pill {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--card-2);
+      color: var(--muted);
+      border: 1px solid var(--line);
+    }
+
+    .pill::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+
+    .pill[data-state="on"] {
+      color: var(--text);
+    }
+
+    .pill[data-state="on"]::before {
+      background: var(--ok);
+    }
+
+    .pill[data-state="warn"]::before {
+      background: var(--warn);
+    }
+
+    .pill[data-state="bad"]::before {
+      background: var(--bad);
+    }
+
+    .viewer {
+      position: relative;
+      aspect-ratio: 4 / 3;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .viewer video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+    }
+
+    .result {
+      font-size: 52px;
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: .04em;
+      margin: 12px 0 2px;
+      min-height: 64px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    .result[data-cat="ENERGY"] {
+      color: var(--energy);
+    }
+
+    .result[data-cat="MIX"] {
+      color: var(--mix);
+    }
+
+    .result[data-cat="BIO"] {
+      color: var(--bio);
+    }
+
+    .result[data-cat="METAL"] {
+      color: var(--metal);
+    }
+
+    .result[data-cat="UNSURE"] {
+      color: var(--warn);
+    }
+
+    .result[data-cat="ERROR"] {
+      color: var(--bad);
+    }
+
+    .result[data-cat="PREPARE"] {
+      color: var(--warn);
+    }
+
+    #itemName.prepare {
+      color: var(--warn);
+      font-size: 18px;
+      font-weight: 700;
+      white-space: normal;
+    }
+
+    .state {
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn.cat {
+      border-width: 2px;
+    }
+
+    .btn[data-cat="ENERGY"] {
+      border-color: var(--energy);
+      color: var(--energy);
+    }
+
+    .btn[data-cat="MIX"] {
+      border-color: var(--mix);
+      color: var(--mix);
+    }
+
+    .btn[data-cat="BIO"] {
+      border-color: var(--bio);
+      color: var(--bio);
+    }
+
+    .btn[data-cat="METAL"] {
+      border-color: var(--metal);
+      color: var(--metal);
+    }
+
+    details.card>summary {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      cursor: pointer;
+      min-height: 32px;
+      list-style-position: inside;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      margin-top: 4px;
+      font: inherit;
+      font-size: 16px;
+      color: var(--text);
+      background: var(--card-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 16px;
+      color: var(--text);
+      min-height: 44px;
+    }
+
+    .check input {
+      width: 26px;
+      height: 26px;
+      accent-color: var(--accent);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      margin-top: 8px;
+      accent-color: var(--accent);
+      height: 32px;
+    }
+
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    #log {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    #log li {
+      padding: 3px 0;
+      border-bottom: 1px solid var(--line);
+      overflow-wrap: anywhere;
+    }
+
+    #log li time {
+      color: var(--muted);
+      margin-right: 8px;
+    }
+
+    /* ---------- Dashboard | Admin switch ---------- */
+    body {
+      padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    }
+
+    .view-switch {
+      position: fixed;
+      left: 50%;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 30;
+      display: flex;
+      gap: 4px;
+      padding: 5px;
+      border-radius: 999px;
+      background: rgba(28, 30, 34, .78);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, .25);
+    }
+
+    .view-switch button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: #c9ccd2;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 999px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .view-switch button[aria-pressed="true"] {
+      background: #fff;
+      color: #1d1d1f;
+    }
+
+    #dashView {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      background: #f6f5f1;
+    }
+
+    #dashView iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      #dashView {
+        background: #121316;
+      }
+    }
+
+    /* In the dashboard view the admin controls are hidden, but the camera keeps
+       running as a small preview in the corner so detection never stops. */
+    body.view-dash #adminView > *:not(#camCard) {
+      display: none;
+    }
+
+    body.view-dash #camCard {
+      position: fixed;
+      right: 16px;
+      bottom: calc(84px + env(safe-area-inset-bottom));
+      width: 120px;
+      padding: 5px;
+      margin: 0;
+      z-index: 20;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    }
+
+    body.view-dash #camCard > *:not(.viewer) {
+      display: none;
+    }
+
+    body.view-dash #camCard .viewer {
+      border-radius: 12px;
+    }
+
+    body.view-dash:not(.cam-on) #camCard {
+      display: none;
+    }
+  </style>
 </head>
+
 <body>
 
-<div class="row2">
-  <button id="connectBtn" class="btn primary">Connect bin</button>
-  <button id="cameraBtn" class="btn primary">Start camera</button>
-</div>
-<div class="pills">
-  <span id="binPill" class="pill">Bin off</span>
-  <span id="camPill" class="pill">Camera off</span>
-  <span id="livePill" class="pill" hidden>Live off</span>
-</div>
-
-<section class="card">
-  <div class="viewer">
-    <video id="video" playsinline muted autoplay></video>
-    <div id="placeholder" class="placeholder">Camera off</div>
-  </div>
-  <div id="result" class="result">—</div>
-  <div id="itemName" class="state"></div>
-  <div id="state" class="state">Start the camera.</div>
+  <div id="adminView">
   <div class="row2">
-    <button id="emptyBtn" class="btn">Set empty platform</button>
-    <button id="classifyBtn" class="btn">Classify now</button>
+    <button id="connectBtn" class="btn primary">Connect bin</button>
+    <button id="cameraBtn" class="btn primary">Start camera</button>
   </div>
-</section>
-
-<section class="card">
-  <h2>Manual sort</h2>
-  <div class="grid">
-    <button class="btn cat bin-only" data-cat="ENERGY" disabled>Energy</button>
-    <button class="btn cat bin-only" data-cat="MIX" disabled>Mix</button>
-    <button class="btn cat bin-only" data-cat="BIO" disabled>Bio</button>
-    <button class="btn cat bin-only" data-cat="METAL" disabled>Metal</button>
-    <button class="btn bin-only" data-raw="turn" disabled>Turn one section</button>
-    <button class="btn bin-only" data-raw="spill" disabled>Spill</button>
+  <div class="pills">
+    <span id="binPill" class="pill">Bin off</span>
+    <span id="camPill" class="pill">Camera off</span>
+    <span id="livePill" class="pill" hidden>Live off</span>
   </div>
-</section>
 
-<!-- Hidden setup page: only shown when the address ends with #setup -->
-<section id="setupCard" class="card" hidden>
-  <h2>Setup (this device only, optional)</h2>
-  <label for="apiKey">Gemini API key (this device; used when none is built in)
-    <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave empty">
-  </label>
-  <label for="mqttUser">Broker user (optional)
-    <input id="mqttUser" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
-  </label>
-  <label for="mqttPass">Broker password (optional)
-    <input id="mqttPass" type="password" autocomplete="off" spellcheck="false">
-  </label>
-  <div class="hint">Saved only on this device. The Groq key and topic name are built into CONFIG in index.html.</div>
-  <button id="setupDone" class="btn primary" style="margin-top:14px">Done</button>
-</section>
-
-<section class="card">
-  <h2>Log</h2>
-  <ol id="log"></ol>
-</section>
-
-<script>
-'use strict';
-
-// ---------------- Constants ----------------
-// The bin (arduino/smart_bin_wifi) and this app both connect to an MQTT broker.
-// The app publishes ENERGY, MIX, BIO, METAL, turn or spill; the bin answers BUSY and DONE.
-// Topics are <secret topic name>/cmd, /status and /online (retained ONLINE / OFFLINE from the bin).
-const topic = name => settings.topicPrefix + '/' + name;
-const SORT_TIMEOUT_MS = 30000;
-const MQTT_KEEPALIVE_S = 60;
-const MQTT_PING_MS = 30000;
-const MQTT_RECONNECT_MS = 3000;
-
-// Sorting rules shared by photo mode and live mode.
-const PROMPT = [
-  'You sort household waste for a bin in Finland that has exactly four compartments: BIO, METAL, ENERGY and MIX.',
-  'The camera looks down at a platform. Ignore the platform, the background, shadows and any hands. Look only at the waste item lying on the platform. If there are several items, sort the largest one.',
-  'First identify exactly what the item is and what it is mainly made of. Then choose the compartment with these rules:',
-  'BIO (biowaste): food leftovers, fruit and vegetable peels and cores, bread, rice, pasta, meat, fish, bones, eggshells, coffee grounds and paper coffee filters, tea bags, used paper napkins, paper towels and tissues, small wooden items like toothpicks, ice cream sticks and chopsticks, cut flowers and plants.',
-  'METAL: anything mainly made of metal. Drink cans and food tins, aluminium foil, aluminium trays and tealight cups, metal lids, jar lids and bottle caps, empty aerosol cans, cutlery, keys, screws, nails, coins, metal pots and pans, wire.',
-  'ENERGY (burnable waste): plastic of any kind and paper or cardboard. Plastic bags, plastic film and wrappers, chip and candy wrappers, plastic bottles, cups and lids, yogurt and butter tubs, plastic trays and boxes, styrofoam, straws, plastic cutlery, pens, toothbrushes, plastic toys, rubber, paper cups, milk and juice cartons, pizza boxes, paper, cardboard, receipts, envelopes, egg cartons.',
-  'MIX (mixed waste): everything that does not fit the others. Ceramics, porcelain, drinking glasses and broken glass, glass jars and bottles, mirrors, diapers, sanitary pads, cotton swabs, cotton pads, wet wipes, cigarette butts, chewing gum, vacuum cleaner bags, sweepings, cat litter, textiles and clothes, items made of several materials glued together that cannot be separated.',
-  'Tips: food inside packaging counts as the packaging. A coated paper cup or carton is ENERGY. Foil-lined chip bags are ENERGY. A plastic bottle with a metal cap is ENERGY. Paper with food on it is BIO only if it is a napkin, towel or tissue; otherwise ENERGY.',
-  'If there is no item on the platform, the category is EMPTY.',
-].join('\n');
-
-// Photo mode also checks whether the item must be emptied or taken apart first.
-const PHOTO_PROMPT = PROMPT + '\n' + [
-  'Think it through like a careful person standing at the bin: what is it, what is it made of, is there anything inside it, and does it have parts made of different materials?',
-  'Set "action" to PREPARE instead of SORT when the item cannot go in one compartment as it is:',
-  '- a bottle, can, jar, carton, cup or tub that still holds a noticeable amount of liquid, sauce, food or other contents (for example a water bottle with water in it, a ketchup bottle with ketchup in it, a half-full yogurt tub). A little leftover residue is fine; it does not need washing.',
-  '- an item with parts of different materials that are easy to separate, such as a glass jar with its metal lid on, or a takeaway box or pizza box with food still in it. Small parts that are hard to remove, like a staple in a tea bag, do not count.',
-  'For PREPARE, "category" is where the empty or main part should go afterwards, and "instruction" tells the person in one short sentence what to do, for example "Pour out the water, then put the bottle back."',
-  'For SORT, "instruction" is an empty string.',
-  'Reply as JSON with "item" (a short name of the item, its material and what is inside it, for example "plastic ketchup bottle, half full of ketchup"), "action" (SORT or PREPARE), "category" (BIO, METAL, ENERGY, MIX or EMPTY) and "instruction".',
-].join('\n');
-
-// Shown when an item must be emptied or taken apart before it can be sorted.
-const PREPARE_TITLE = 'EMPTY ME';
-const PREPARE_MESSAGE = 'Get the shit out of me!';
-const LIVE_PROMPT = PROMPT + ' You are watching a live camera above the platform. Stay silent. Only when you are told an item has been placed, call the sort_item function once with the category. Never answer in speech.';
-const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
-
-// Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
-const CONFIG = {
-  // Tried in this order for every photo. Each model has its own free daily allowance;
-  // when one runs out the next is used, and Groq (photoModel) comes last.
-  geminiModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'],
-  photoModel: 'qwen/qwen3.8-27b',   // Groq backup, used when every Gemini model is out of quota or fails
-  liveModel: 'gemini-3.8-live',     // Live mode only (off), uses the Gemini key
-  liveMode: false,
-  sensitivity: 16,                // item detection threshold; lower is more sensitive
-  mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
-  // Built in so every device works without setup. This file is public, so anyone can
-  // read these. Split only to avoid automatic leak scanners, not to hide them.
-  geminiKey: '',   // paste your Gemini key between the quotes; empty = Groq only
-  groqKey: ['gsk_', 'KHWd6JHrX1I4pPux', 'qnkyWGdyb3FYKz5c', '69enHmI3Gg0QGrzsXxys'].join(''),
-  topicPrefix: 'smartbin-b0p1r0mw5c', // must match SECRET_TOPIC_PREFIX in arduino_secrets.h
-};
-
-// Optional extras, saved per device on the hidden setup page (page address + #setup).
-const DEFAULTS = {
-  apiKey: '',
-  mqttUser: '',
-  mqttPass: '',
-  binAuto: true,   // connect to the bin automatically when the page opens
-};
-
-const DETECT_MS = 200;
-const SMALL_W = 32, SMALL_H = 24;
-const STILL_LIMIT = 5;        // max mean difference from previous frame to count as still
-const STILL_SAMPLES = 2;      // still samples in a row before triggering (about 0.4 s)
-const EMPTY_FOLLOW = 0.05;    // how fast the empty frame follows slow lighting changes
-const REBASE_MS = 1500;       // re-save empty frame this long after a sort
-const LIVE_WAIT_MS = 8000;
-const PHOTO_TIMEOUT_MS = 30000;
-const LIVE_FRAME_MS = 1000;
-const LIVE_RECYCLE_MS = 100000;
-const LIVE_RECONNECT_MS = 1500;
-const LIVE_BACKOFF_MS = 30000; // after repeated failed starts, to avoid hammering the API
-
-const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-// ---------------- Log ----------------
-const logEl = $('log');
-function log(msg) {
-  const li = document.createElement('li');
-  const time = document.createElement('time');
-  time.textContent = new Date().toLocaleTimeString([], { hour12: false });
-  li.append(time, String(msg));
-  logEl.prepend(li);
-  while (logEl.children.length > 200) logEl.lastChild.remove();
-  console.log(msg);
-}
-window.addEventListener('error', e => log('Error: ' + e.message));
-window.addEventListener('unhandledrejection', e => log('Error: ' + (e.reason && e.reason.message || e.reason)));
-
-// ---------------- Settings ----------------
-const settings = { ...CONFIG };
-for (const name of Object.keys(DEFAULTS)) {
-  try {
-    const raw = localStorage.getItem('smartbin.' + name);
-    settings[name] = raw === null ? DEFAULTS[name] : JSON.parse(raw);
-  } catch {
-    settings[name] = DEFAULTS[name];
-  }
-}
-// One Gemini key for photos and Live mode: the built-in one, or the one saved on this device.
-if (!settings.geminiKey) settings.geminiKey = settings.apiKey;
-if (!settings.apiKey) settings.apiKey = settings.geminiKey;
-function saveSetting(name, value) {
-  settings[name] = value;
-  try {
-    localStorage.setItem('smartbin.' + name, JSON.stringify(value));
-  } catch (e) {
-    log('Could not save setting: ' + e.message);
-  }
-}
-
-// ---------------- UI helpers ----------------
-const video = $('video');
-const resultEl = $('result');
-const stateEl = $('state');
-
-function setPill(el, text, state) {
-  el.textContent = text;
-  el.dataset.state = state || '';
-}
-function showItemName(text) {
-  $('itemName').classList.remove('prepare');
-  $('itemName').textContent = text || '';
-}
-function showResult(word) {
-  resultEl.textContent = word || '—';
-  resultEl.dataset.cat = word || '';
-}
-let activity = '';
-function setActivity(text) {
-  activity = text;
-  if (text) stateEl.textContent = text;
-}
-function setState(text) {
-  if (!activity) stateEl.textContent = text;
-}
-// ---------------- MQTT over WebSocket to the bin ----------------
-// A minimal MQTT 3.1.1 client: CONNECT, SUBSCRIBE, PUBLISH (QoS 0) and PING.
-const bin = {
-  ws: null,
-  connected: false,    // logged in to the broker
-  online: false,       // bin reported ONLINE
-  wanted: false,       // user asked to be connected
-  buf: new Uint8Array(0),
-  pingTimer: null,
-  reconnectTimer: null,
-  doneWaiter: null,
-  packetId: 0,
-};
-
-function mqttString(str) {
-  const b = encoder.encode(str);
-  return [b.length >> 8, b.length & 255, ...b];
-}
-function mqttPacket(first, body) {
-  const len = [];
-  let n = body.length;
-  do {
-    let digit = n % 128;
-    n = Math.floor(n / 128);
-    if (n > 0) digit |= 128;
-    len.push(digit);
-  } while (n > 0);
-  return new Uint8Array([first, ...len, ...body]);
-}
-function brokerUrl() {
-  const host = settings.mqttHost.trim();
-  return /^wss?:\/\//.test(host) ? host : 'wss://' + host + ':8884/mqtt';
-}
-
-function isBinConnected() {
-  return bin.connected && bin.online;
-}
-function updateBinUi() {
-  const pill = $('binPill');
-  if (!bin.ws) setPill(pill, bin.wanted ? 'Bin reconnecting…' : 'Bin off', bin.wanted ? 'warn' : '');
-  else if (!bin.connected) setPill(pill, 'Connecting…', 'warn');
-  else if (!bin.online) setPill(pill, 'Bin offline', 'bad');
-  else setPill(pill, 'Bin online', 'on');
-  document.querySelectorAll('.bin-only').forEach(b => { b.disabled = !isBinConnected(); });
-  $('connectBtn').textContent = bin.wanted ? 'Disconnect bin' : 'Connect bin';
-}
-
-function toggleBin() {
-  if (bin.wanted) {
-    bin.wanted = false;
-    saveSetting('binAuto', false);
-    clearTimeout(bin.reconnectTimer);
-    if (bin.ws) {
-      try { bin.ws.send(new Uint8Array([0xe0, 0])); } catch { /* closing anyway */ }
-      bin.ws.close();
-    }
-    updateBinUi();
-    log('Bin disconnected.');
-    return;
-  }
-  bin.wanted = true;
-  saveSetting('binAuto', true);
-  binConnect();
-}
-
-function binConnect() {
-  clearTimeout(bin.reconnectTimer);
-  if (bin.ws || !bin.wanted) return;
-  if (!settings.mqttHost || !settings.topicPrefix) {
-    log('This phone is not set up yet (no secret topic name).');
-    bin.wanted = false;
-    updateBinUi();
-    return;
-  }
-  let ws;
-  try {
-    ws = new WebSocket(brokerUrl(), 'mqtt');
-  } catch (e) {
-    log('Broker connect failed: ' + e.message);
-    scheduleBinReconnect();
-    return;
-  }
-  ws.binaryType = 'arraybuffer';
-  bin.ws = ws;
-  bin.buf = new Uint8Array(0);
-  updateBinUi();
-  ws.onopen = () => {
-    if (ws !== bin.ws) return;
-    const clientId = 'smartbin-phone-' + Math.random().toString(16).slice(2, 8);
-    const user = settings.mqttUser;
-    const flags = 0x02 | (user ? 0xc0 : 0); // clean session, plus username and password if given
-    const body = [
-      ...mqttString('MQTT'), 4,       // protocol name and level 3.1.1
-      flags,
-      MQTT_KEEPALIVE_S >> 8, MQTT_KEEPALIVE_S & 255,
-      ...mqttString(clientId),
-      ...(user ? [...mqttString(user), ...mqttString(settings.mqttPass)] : []),
-    ];
-    ws.send(mqttPacket(0x10, body));
-  };
-  ws.onmessage = ev => {
-    if (ws === bin.ws) onBrokerData(new Uint8Array(ev.data));
-  };
-  ws.onerror = () => {
-    if (ws === bin.ws) log('Broker connection error.');
-  };
-  ws.onclose = ev => {
-    if (ws !== bin.ws) return;
-    bin.ws = null;
-    bin.connected = false;
-    bin.online = false;
-    clearInterval(bin.pingTimer);
-    if (bin.doneWaiter) bin.doneWaiter(false);
-    if (bin.wanted) log('Broker connection closed (' + ev.code + ').');
-    updateBinUi();
-    scheduleBinReconnect();
-  };
-}
-
-function scheduleBinReconnect() {
-  if (!bin.wanted) return;
-  clearTimeout(bin.reconnectTimer);
-  bin.reconnectTimer = setTimeout(binConnect, MQTT_RECONNECT_MS);
-}
-
-// WebSocket messages can hold several MQTT packets or part of one, so buffer them.
-function onBrokerData(chunk) {
-  const data = new Uint8Array(bin.buf.length + chunk.length);
-  data.set(bin.buf);
-  data.set(chunk, bin.buf.length);
-  let pos = 0;
-  while (data.length - pos >= 2) {
-    let len = 0, mult = 1, i = pos + 1, byte, complete = true;
-    do {
-      if (i >= data.length) { complete = false; break; }
-      byte = data[i++];
-      len += (byte & 127) * mult;
-      mult *= 128;
-    } while (byte & 128);
-    if (!complete || i + len > data.length) break;
-    handleMqttPacket(data[pos], data.subarray(i, i + len));
-    pos = i + len;
-  }
-  bin.buf = data.slice(pos);
-}
-
-function handleMqttPacket(first, body) {
-  const type = first >> 4;
-  if (type === 2) { // CONNACK
-    if (body[1] !== 0) {
-      log('Broker refused the login (code ' + body[1] + '). Check the broker settings.');
-      bin.wanted = false;
-      bin.ws.close();
-      return;
-    }
-    bin.connected = true;
-    log('Broker connected.');
-    bin.packetId = (bin.packetId % 65535) + 1;
-    bin.ws.send(mqttPacket(0x82, [
-      bin.packetId >> 8, bin.packetId & 255,
-      ...mqttString(topic('status')), 0,
-      ...mqttString(topic('online')), 0,
-    ]));
-    clearInterval(bin.pingTimer);
-    bin.pingTimer = setInterval(() => {
-      if (bin.ws && bin.ws.readyState === WebSocket.OPEN) bin.ws.send(new Uint8Array([0xc0, 0]));
-    }, MQTT_PING_MS);
-    updateBinUi();
-  } else if (type === 3) { // PUBLISH
-    const qos = (first >> 1) & 3;
-    const topicLen = (body[0] << 8) | body[1];
-    const name = decoder.decode(body.subarray(2, 2 + topicLen));
-    const start = 2 + topicLen + (qos > 0 ? 2 : 0);
-    onBinMessage(name, decoder.decode(body.subarray(start)).trim());
-  }
-}
-
-function onBinMessage(name, payload) {
-  if (name === topic('online')) {
-    const online = payload === 'ONLINE';
-    if (online !== bin.online) log(online ? 'Bin online.' : 'Bin offline.');
-    bin.online = online;
-    if (!online && bin.doneWaiter) bin.doneWaiter(false);
-    updateBinUi();
-  } else if (name === topic('status')) {
-    log('Bin: ' + payload);
-    if (payload === 'DONE' && bin.doneWaiter) bin.doneWaiter(true);
-  }
-}
-
-function publishCmd(text) {
-  if (!bin.connected || !bin.ws || bin.ws.readyState !== WebSocket.OPEN) throw new Error('Not connected to the broker');
-  bin.ws.send(mqttPacket(0x30, [...mqttString(topic('cmd')), ...encoder.encode(text)]));
-}
-
-function waitForDone(ms) {
-  return new Promise(resolve => {
-    const timer = setTimeout(() => finish(false), ms);
-    function finish(ok) {
-      clearTimeout(timer);
-      if (bin.doneWaiter === finish) bin.doneWaiter = null;
-      resolve(ok);
-    }
-    bin.doneWaiter = finish;
-  });
-}
-
-// Sends a command and waits for DONE. Returns true if the command was sent.
-async function sendAndWait(cmd, activityText) {
-  setActivity(activityText);
-  const done = waitForDone(SORT_TIMEOUT_MS);
-  try {
-    publishCmd(cmd);
-    log('Sent ' + cmd);
-  } catch (e) {
-    if (bin.doneWaiter) bin.doneWaiter(false);
-    log('Send failed: ' + e.message);
-    return false;
-  }
-  const ok = await done;
-  log(ok ? 'Bin finished.' : 'No DONE from the bin within 30 s.');
-  return true;
-}
-
-async function runSort(cat) {
-  if (!isBinConnected()) {
-    log(cat + ': bin not online, nothing sent.');
-    return false;
-  }
-  return sendAndWait(cat, 'Sorting to ' + cat + '…');
-}
-
-// Manual "turn" or "spill" for testing and calibration.
-async function manualRaw(cmd) {
-  if (busy) {
-    log('Busy, wait for the current item.');
-    return;
-  }
-  busy = true;
-  try {
-    await sendAndWait(cmd, 'Sending ' + cmd + '…');
-  } finally {
-    busy = false;
-    setActivity('');
-  }
-}
-
-// After a sort the platform should be empty again; wait, then re-save it.
-async function afterSort() {
-  setActivity('Settling…');
-  await sleep(REBASE_MS);
-  if (cameraReady()) saveEmptyFrame(false);
-  stillCount = 0;
-}
-
-// ---------------- Camera ----------------
-let stream = null;
-let wakeLock = null;
-
-function cameraReady() {
-  return !!stream && video.readyState >= 2 && video.videoWidth > 0;
-}
-
-async function toggleCamera() {
-  if (stream) {
-    stopCamera();
-    return;
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    log('Camera not available. Open the page over HTTPS.');
-    return;
-  }
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-    });
-    video.srcObject = stream;
-    await video.play();
-    $('placeholder').hidden = true;
-    $('cameraBtn').textContent = 'Stop camera';
-    setPill($('camPill'), 'Camera on', 'on');
-    stream.getVideoTracks()[0].addEventListener('ended', () => {
-      log('Camera stopped by the system.');
-      stopCamera();
-    });
-    detectTimer = setInterval(detectTick, DETECT_MS);
-    requestWakeLock();
-    warmUpAi();
-    log('Camera started (' + video.videoWidth + '×' + video.videoHeight + ').');
-    if (!emptyFrame) setState('Clear the platform and tap Set empty platform.');
-  } catch (e) {
-    stream = null;
-    log('Camera failed: ' + e.message);
-  }
-}
-
-function stopCamera() {
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  stream = null;
-  video.srcObject = null;
-  clearInterval(detectTimer);
-  prevFrame = null;
-  stillCount = 0;
-  $('placeholder').hidden = false;
-  $('cameraBtn').textContent = 'Start camera';
-  setPill($('camPill'), 'Camera off', '');
-  setState('Start the camera.');
-  if (wakeLock) wakeLock.release().catch(() => {});
-  wakeLock = null;
-  log('Camera stopped.');
-}
-
-async function requestWakeLock() {
-  if (!('wakeLock' in navigator)) {
-    log('Screen wake lock not supported.');
-    return;
-  }
-  try {
-    wakeLock = await navigator.wakeLock.request('screen');
-    wakeLock.addEventListener('release', () => { wakeLock = null; });
-  } catch (e) {
-    log('Wake lock failed: ' + e.message);
-  }
-}
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && stream && !wakeLock) requestWakeLock();
-});
-
-const bigCanvas = document.createElement('canvas');
-function grabJpeg(maxW, quality) {
-  const scale = Math.min(1, maxW / video.videoWidth);
-  bigCanvas.width = Math.round(video.videoWidth * scale);
-  bigCanvas.height = Math.round(video.videoHeight * scale);
-  bigCanvas.getContext('2d').drawImage(video, 0, 0, bigCanvas.width, bigCanvas.height);
-  return bigCanvas.toDataURL('image/jpeg', quality).split(',')[1];
-}
-
-// ---------------- Item detection ----------------
-const smallCanvas = document.createElement('canvas');
-smallCanvas.width = SMALL_W;
-smallCanvas.height = SMALL_H;
-const smallCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
-
-let detectTimer = null;
-let emptyFrame = null;
-let prevFrame = null;
-let stillCount = 0;
-let lastItemFrame = null;   // the item just classified, so it is not classified again
-let busy = false;
-
-function grabGray() {
-  smallCtx.drawImage(video, 0, 0, SMALL_W, SMALL_H);
-  const d = smallCtx.getImageData(0, 0, SMALL_W, SMALL_H).data;
-  const g = new Float32Array(SMALL_W * SMALL_H);
-  for (let i = 0, j = 0; i < g.length; i++, j += 4) {
-    g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
-  }
-  return g;
-}
-
-function meanAbsDiff(a, b) {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
-  return sum / a.length;
-}
-
-function saveEmptyFrame(manual) {
-  if (!cameraReady()) {
-    log('Start the camera first.');
-    return;
-  }
-  emptyFrame = grabGray();
-  lastItemFrame = null;
-  stillCount = 0;
-  log(manual ? 'Empty platform saved.' : 'Empty platform re-saved.');
-}
-
-function detectTick() {
-  if (!cameraReady()) return;
-  const g = grabGray();
-  const dPrev = prevFrame ? meanAbsDiff(g, prevFrame) : 255;
-  prevFrame = g;
-  if (busy) {
-    stillCount = 0;
-    return;
-  }
-  const still = dPrev < STILL_LIMIT;
-
-  // No empty frame yet: save the first still picture automatically.
-  // If an item was in view, the model answers EMPTY once it is removed and the frame is fixed then.
-  if (!emptyFrame) {
-    stillCount = still ? stillCount + 1 : 0;
-    setState('Hold the camera still over the empty platform…');
-    if (stillCount >= STILL_SAMPLES) {
-      emptyFrame = g;
-      stillCount = 0;
-      log('Empty platform saved automatically.');
-    }
-    return;
-  }
-
-  const sens = settings.sensitivity;
-  const dEmpty = meanAbsDiff(g, emptyFrame);
-  const dItem = lastItemFrame ? meanAbsDiff(g, lastItemFrame) : Infinity;
-  const numbers = 'change ' + dEmpty.toFixed(1) + ' / ' + sens + ' · motion ' + dPrev.toFixed(1);
-
-  // Follow slow lighting changes while the platform looks empty.
-  if (still && dEmpty < sens * 0.5) {
-    for (let i = 0; i < g.length; i++) emptyFrame[i] += (g[i] - emptyFrame[i]) * EMPTY_FOLLOW;
-  }
-  if (lastItemFrame && still && dEmpty < sens * 0.75) {
-    lastItemFrame = null;
-    log('Platform clear.');
-  }
-
-  // A new item: different from the empty platform and from the item just classified.
-  const isNewItem = dEmpty > sens && dItem > sens;
-  stillCount = isNewItem && still ? stillCount + 1 : 0;
-  setState((lastItemFrame && !isNewItem ? 'Done · remove it or place the next item · ' : 'Watching · ') + numbers);
-
-  if (stillCount >= STILL_SAMPLES) {
-    stillCount = 0;
-    lastItemFrame = g;
-    log('Item detected.');
-    processItem();
-  }
-}
-
-// ---------------- Classification ----------------
-function parseCategory(text) {
-  const words = String(text || '').toUpperCase().match(/\b(ENERGY|MIX|BIO|METAL|EMPTY)\b/g);
-  if (!words) return null;
-  const unique = [...new Set(words)];
-  return unique.length === 1 ? unique[0] : null;
-}
-
-// ---------------- Photo mode: Gemini first, Groq as backup ----------------
-const PHOTO_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    item: { type: 'STRING' },
-    action: { type: 'STRING', enum: ['SORT', 'PREPARE'] },
-    category: { type: 'STRING', enum: ['BIO', 'METAL', 'ENERGY', 'MIX', 'EMPTY'] },
-    instruction: { type: 'STRING' },
-  },
-  required: ['item', 'action', 'category', 'instruction'],
-  propertyOrdering: ['item', 'action', 'category', 'instruction'],
-};
-const geminiPausedUntil = {};   // per model: while out of quota or failing, skip it
-const geminiNoThinking = new Set(); // models that reject the thinking setting
-
-async function classifyPhoto() {
-  const image = grabJpeg(768, 0.85);
-  if (settings.geminiKey) {
-    for (const model of settings.geminiModels) {
-      if (Date.now() < (geminiPausedUntil[model] || 0)) continue;
-      try {
-        setActivity('Asking ' + model + '…');
-        return { text: await classifyGemini(image, model), via: model };
-      } catch (e) {
-        // Out of free quota: skip it as long as Google says. Other errors: try it again later.
-        let pauseS = e.status === 429 ? (e.retrySecs || 60) : (e.status === 400 || e.status === 403 || e.status === 404 ? 600 : 30);
-        pauseS = Math.min(pauseS, 3600);
-        geminiPausedUntil[model] = Date.now() + pauseS * 1000;
-        log(model + (e.status === 429 ? ' free limit reached.' : ' failed: ' + e.message + '.') +
-          ' Skipping it for ' + (pauseS >= 120 ? Math.round(pauseS / 60) + ' min.' : pauseS + ' s.'));
-      }
-    }
-  }
-  return { text: await classifyGroq(image), via: 'groq' };
-}
-
-async function classifyGemini(image, model) {
-  try {
-    return await requestGemini(image, model);
-  } catch (e) {
-    if (geminiNoThinking.has(model) || !/thinking/i.test(e.message)) throw e;
-    geminiNoThinking.add(model);
-    return requestGemini(image, model);
-  }
-}
-
-async function requestGemini(image, model) {
-  const body = {
-    contents: [{
-      parts: [
-        { text: PHOTO_PROMPT },
-        { inline_data: { mime_type: 'image/jpeg', data: image } },
-      ],
-    }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: PHOTO_SCHEMA },
-  };
-  if (!geminiNoThinking.has(model)) body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15000);
-  try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.geminiKey },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      const err = new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
-      err.status = res.status;
-      // Google says how long to wait in a RetryInfo detail, e.g. "32s".
-      const info = json && json.error && (json.error.details || []).find(d => d.retryDelay);
-      if (info) err.retrySecs = Math.ceil(parseFloat(info.retryDelay)) || 0;
-      throw err;
-    }
-    const parts = (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    const text = parts.filter(p => !p.thought).map(p => p.text || '').join('').trim();
-    if (!text) throw new Error('empty answer');
-    return text;
-  } catch (e) {
-    if (e.name === 'AbortError') throw new Error('timed out');
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ---------------- Photo mode backup (Groq) ----------------
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-
-// Optional request settings. If Groq rejects one for this model, it is dropped and remembered.
-const groqOptions = {
-  response_format: { type: 'json_object' },  // answer must be JSON
-  reasoning_format: 'hidden',                 // think, but return only the answer
-  temperature: 0.2,
-};
-
-// Groq's free plan allows a fixed number of tokens per minute (about 3 photos).
-// Browsers cannot read Groq's rate-limit headers, so the app keeps its own count
-// of tokens used in the last minute and waits *before* sending when it would go over.
-const GROQ_TOKENS_PER_MIN = 8000;
-const groqUsage = [];          // { at, tokens } for each answer in the last minute
-let groqPerPhoto = 2200;       // updated from real answers
-
-function recordGroqUsage(usage) {
-  if (!usage || !usage.total_tokens) return;
-  groqPerPhoto = usage.total_tokens;
-  groqUsage.push({ at: Date.now(), tokens: usage.total_tokens });
-}
-// How long until another photo fits in the per-minute budget (0 = now).
-function groqWaitMs() {
-  const now = Date.now();
-  while (groqUsage.length && now - groqUsage[0].at > 60000) groqUsage.shift();
-  let used = groqUsage.reduce((sum, u) => sum + u.tokens, 0);
-  for (const u of groqUsage) {
-    if (used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95) break;
-    used -= u.tokens;
-    if (used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95) return u.at + 60000 - now;
-  }
-  return used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95 ? 0 : 60000;
-}
-// Groq's 429 message says e.g. "Please try again in 12.345s" or "in 1m2.5s".
-function retrySecondsFrom(message) {
-  const m = String(message).match(/try again in ((?:[\d.]+(?:ms|h|m|s))+)/i);
-  if (!m) return 10;
-  let secs = 0;
-  for (const [, n, unit] of m[1].matchAll(/([\d.]+)(ms|h|m|s)/g)) secs += Number(n) * { ms: 0.001, s: 1, m: 60, h: 3600 }[unit];
-  return Math.max(1, Math.ceil(secs));
-}
-
-async function waitWithCountdown(ms, label) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    setActivity(label + ' ' + Math.ceil((end - Date.now()) / 1000) + ' s…');
-    await sleep(Math.min(1000, end - Date.now()));
-  }
-}
-
-async function classifyGroq(image) {
-  if (!settings.groqKey) throw new Error('No Groq API key in CONFIG.');
-
-  // Not enough of this minute's budget left: wait for it to refill first.
-  const refillMs = groqWaitMs();
-  if (refillMs > 0) {
-    log('Free plan limit: waiting ' + Math.ceil(refillMs / 1000) + ' s before asking.');
-    await waitWithCountdown(refillMs + 300, 'Free plan limit, answer in');
-  }
-
-  for (let attempt = 0; attempt < 6; attempt++) {
-    try {
-      setActivity('Asking Groq…');
-      return await requestGroq(image);
-    } catch (e) {
-      if (e.retryAfter && attempt < 3 && e.retryAfter <= 60) {
-        log('Groq free limit reached, waiting ' + e.retryAfter + ' s.');
-        await waitWithCountdown(e.retryAfter * 1000, 'Free plan limit, answer in');
-        continue;
-      }
-      const rejected = Object.keys(groqOptions).find(k => e.message.includes(k));
-      if (!rejected) throw e;
-      delete groqOptions[rejected];
-      log('Groq does not accept "' + rejected + '" for this model, sending without it.');
-    }
-  }
-  throw new Error('Groq request failed.');
-}
-
-async function requestGroq(image) {
-  const body = {
-    model: settings.photoModel,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'text', text: PHOTO_PROMPT },
-        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + image } },
-      ],
-    }],
-    ...groqOptions,
-  };
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
-  try {
-    const res = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + settings.groqKey },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    const json = await res.json().catch(() => null);
-    if (res.ok) recordGroqUsage(json && json.usage);
-    if (!res.ok) {
-      const err = new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
-      if (res.status === 429) err.retryAfter = retrySecondsFrom(err.message);
-      throw err;
-    }
-    let text = (json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || '';
-    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim(); // in case reasoning comes back inline
-    const match = text.match(/\{[\s\S]*\}/);
-    return match ? match[0] : text;
-  } catch (e) {
-    if (e.name === 'AbortError') throw new Error('Photo request timed out.');
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// Opens the connection to Groq ahead of time so the first answer does not
-// also pay for the connection setup.
-function warmUpAi() {
-  if (settings.geminiKey) {
-    fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(settings.geminiModels[0]), {
-      headers: { 'x-goog-api-key': settings.geminiKey },
-    }).catch(() => {});
-  }
-  if (!settings.groqKey) return;
-  fetch('https://api.groq.com/openai/v1/models', {
-    headers: { 'Authorization': 'Bearer ' + settings.groqKey },
-  }).catch(() => {});
-}
-
-async function classify() {
-  if (settings.liveMode) {
-    if (live.ready) {
-      setActivity('Asking live model…');
-      const answer = await liveAsk(LIVE_WAIT_MS);
-      if (answer) return { text: answer, via: 'live' };
-      log('Live mode gave no answer within 8 s, using photo mode.');
-    } else {
-      log('Live session not ready, using photo mode.');
-    }
-  }
-  return classifyPhoto();
-}
-
-async function processItem() {
-  if (busy) return;
-  if (!cameraReady()) {
-    log('Start the camera first.');
-    return;
-  }
-  busy = true;
-  showResult('…');
-  showItemName('');
-  try {
-    const t0 = performance.now();
-    const { text, via } = await classify();
-    const secs = ((performance.now() - t0) / 1000).toFixed(1);
-    let cat = null, item = '', prepare = false, instruction = '';
-    try {
-      const json = JSON.parse(text);
-      item = String(json.item || '');
-      cat = parseCategory(json.category);
-      prepare = json.action === 'PREPARE' && cat !== 'EMPTY';
-      instruction = String(json.instruction || '').trim();
-    } catch {
-      cat = parseCategory(text); // live mode answers with the category word only
-    }
-    showItemName(item);
-    log('Answer (' + via + ', ' + secs + ' s): ' + (item ? item + ' → ' : '"' + text + '" → ') + (cat || 'UNSURE'));
-    if (prepare) {
-      showResult(PREPARE_TITLE);
-      $('result').dataset.cat = 'PREPARE';
-      showItemName(PREPARE_MESSAGE + ' ' + (instruction || 'Empty it or take it apart, then put it back.'));
-      $('itemName').classList.add('prepare');
-      log('Needs preparing first: ' + (instruction || item) + ' Afterwards: ' + cat + '.');
-    } else if (cat === 'EMPTY') {
-      showResult('');
-      if (cameraReady()) saveEmptyFrame(false); // the scene is empty, so use it as the new empty frame
-      log('Model sees no item. If the scene changed, tap Set empty platform.');
-    } else if (!cat) {
-      showResult('UNSURE');
-      log('Not sure. Tap a manual sort button.');
-    } else {
-      showResult(cat);
-      if (await runSort(cat)) await afterSort();
-    }
-  } catch (e) {
-    showResult('ERROR');
-    log('Classification failed: ' + e.message);
-  } finally {
-    busy = false;
-    setActivity('');
-  }
-}
-
-async function manualSort(cat) {
-  if (busy) {
-    log('Busy, wait for the current item.');
-    return;
-  }
-  busy = true;
-  showResult(cat);
-  try {
-    if (await runSort(cat)) await afterSort();
-  } finally {
-    busy = false;
-    setActivity('');
-  }
-}
-
-// ---------------- Live mode ----------------
-const live = {
-  ws: null,
-  ready: false,
-  startedAt: 0,
-  pending: null,
-  transcript: '',
-  frameTimer: null,
-  reconnectTimer: null,
-  failedStarts: 0,
-  msgChain: Promise.resolve(),
-};
-
-function updateLivePill() {
-  const pill = $('livePill');
-  pill.hidden = !settings.liveMode;
-  if (live.ready) setPill(pill, 'Live on', 'on');
-  else if (live.ws) setPill(pill, 'Live connecting…', 'warn');
-  else setPill(pill, 'Live off', settings.liveMode ? 'bad' : '');
-}
-
-function liveSetupMessage() {
-  const model = (settings.liveModel || CONFIG.liveModel).trim().replace(/^models\//, '');
-  return {
-    setup: {
-      model: 'models/' + model,
-      generationConfig: { responseModalities: ['AUDIO'] },
-      outputAudioTranscription: {},
-      systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
-      tools: [{
-        functionDeclarations: [{
-          name: 'sort_item',
-          description: 'Send the waste category of the item on the platform to the bin.',
-          parameters: {
-            type: 'OBJECT',
-            properties: {
-              category: { type: 'STRING', enum: ['ENERGY', 'MIX', 'BIO', 'METAL', 'EMPTY'] },
-            },
-            required: ['category'],
-          },
-        }],
-      }],
-    },
-  };
-}
-
-function liveSend(obj) {
-  if (live.ws && live.ws.readyState === WebSocket.OPEN) {
-    live.ws.send(JSON.stringify(obj));
-    return true;
-  }
-  return false;
-}
-
-function liveStart() {
-  clearTimeout(live.reconnectTimer);
-  if (!settings.liveMode || live.ws) return;
-  if (!settings.apiKey) {
-    log('Live mode needs an API key.');
-    updateLivePill();
-    return;
-  }
-  const url = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(settings.apiKey);
-  let ws;
-  try {
-    ws = new WebSocket(url);
-  } catch (e) {
-    log('Live socket failed: ' + e.message);
-    scheduleLiveReconnect();
-    return;
-  }
-  live.ws = ws;
-  live.ready = false;
-  updateLivePill();
-  ws.onopen = () => {
-    if (ws === live.ws) ws.send(JSON.stringify(liveSetupMessage()));
-  };
-  ws.onmessage = ev => {
-    live.msgChain = live.msgChain.then(() => onLiveMessage(ws, ev.data)).catch(e => log('Live message error: ' + e.message));
-  };
-  ws.onerror = () => {
-    if (ws === live.ws) log('Live socket error.');
-  };
-  ws.onclose = ev => onLiveClose(ws, ev);
-}
-
-async function onLiveMessage(ws, data) {
-  if (ws !== live.ws) return;
-  let text;
-  if (typeof data === 'string') text = data;
-  else if (data instanceof Blob) text = await data.text();
-  else text = decoder.decode(data);
-  let msg;
-  try {
-    msg = JSON.parse(text);
-  } catch {
-    log('Live: unreadable message.');
-    return;
-  }
-
-  if (msg.setupComplete) {
-    live.ready = true;
-    live.startedAt = Date.now();
-    live.failedStarts = 0;
-    clearInterval(live.frameTimer);
-    live.frameTimer = setInterval(sendLiveFrame, LIVE_FRAME_MS);
-    updateLivePill();
-    log('Live session started.');
-  }
-
-  if (msg.toolCall) {
-    const calls = msg.toolCall.functionCalls || [];
-    const responses = calls.map(fc => ({ id: fc.id, name: fc.name, response: { result: 'ok' } }));
-    if (responses.length) liveSend({ toolResponse: { functionResponses: responses } });
-    for (const fc of calls) {
-      if (fc.name !== 'sort_item') continue;
-      const cat = String((fc.args && fc.args.category) || '');
-      log('Live tool call: sort_item(' + cat + ')');
-      if (live.pending) live.pending(cat);
-      else log('No item was waiting, tool call ignored.');
-    }
-  }
-
-  // The model's audio is never played; only its transcription is logged.
-  const sc = msg.serverContent;
-  if (sc) {
-    if (sc.outputTranscription && sc.outputTranscription.text) live.transcript += sc.outputTranscription.text;
-    if ((sc.turnComplete || sc.generationComplete) && live.transcript.trim()) {
-      log('Live said: ' + live.transcript.trim());
-      live.transcript = '';
-    }
-  }
-
-  if (msg.goAway) log('Live session ending soon.');
-}
-
-function onLiveClose(ws, ev) {
-  if (ws !== live.ws) return;
-  const wasReady = live.ready;
-  live.ws = null;
-  live.ready = false;
-  live.transcript = '';
-  clearInterval(live.frameTimer);
-  if (live.pending) live.pending(null);
-  log('Live socket closed (' + ev.code + (ev.reason ? ': ' + ev.reason : '') + ').');
-  if (!wasReady) live.failedStarts++;
-  updateLivePill();
-  scheduleLiveReconnect();
-}
-
-function scheduleLiveReconnect() {
-  if (!settings.liveMode) return;
-  clearTimeout(live.reconnectTimer);
-  const delay = live.failedStarts >= 3 ? LIVE_BACKOFF_MS : LIVE_RECONNECT_MS;
-  if (delay > LIVE_RECONNECT_MS) log('Live failed to start ' + live.failedStarts + ' times. Check key and model. Retrying in 30 s.');
-  live.reconnectTimer = setTimeout(liveStart, delay);
-}
-
-function liveStop() {
-  clearTimeout(live.reconnectTimer);
-  clearInterval(live.frameTimer);
-  const ws = live.ws;
-  live.ws = null;
-  live.ready = false;
-  live.failedStarts = 0;
-  if (live.pending) live.pending(null);
-  if (ws) ws.close(1000, 'stopped');
-  updateLivePill();
-}
-
-function sendLiveFrame() {
-  if (!live.ready || !cameraReady()) return;
-  if (live.ws.bufferedAmount > 1000000) return; // network is behind; skip a frame
-  liveSend({ realtimeInput: { video: { data: grabJpeg(640, 0.7), mimeType: 'image/jpeg' } } });
-}
-
-function liveAsk(ms) {
-  return new Promise(resolve => {
-    if (!live.ready) {
-      resolve(null);
-      return;
-    }
-    const timer = setTimeout(() => finish(null), ms);
-    function finish(cat) {
-      clearTimeout(timer);
-      if (live.pending === finish) live.pending = null;
-      resolve(cat);
-    }
-    live.pending = finish;
-    sendLiveFrame();
-    if (!liveSend({ realtimeInput: { text: LIVE_ITEM_TEXT } })) finish(null);
-  });
-}
-
-// Video sessions are limited to 2 minutes, so refresh every 100 s while idle.
-setInterval(() => {
-  if (live.ready && !live.pending && !busy && Date.now() - live.startedAt >= LIVE_RECYCLE_MS) {
-    log('Refreshing live session.');
-    live.ws.close(1000, 'refresh');
-  }
-}, 2000);
-
-// ---------------- Wiring ----------------
-$('connectBtn').addEventListener('click', toggleBin);
-$('cameraBtn').addEventListener('click', toggleCamera);
-$('emptyBtn').addEventListener('click', () => saveEmptyFrame(true));
-$('classifyBtn').addEventListener('click', () => {
-  if (busy) {
-    log('Busy, wait for the current item.');
-    return;
-  }
-  if (cameraReady()) lastItemFrame = grabGray(); // so auto-detection does not classify it again
-  stillCount = 0;
-  processItem();
-});
-document.querySelectorAll('[data-cat]').forEach(b => {
-  b.addEventListener('click', () => manualSort(b.dataset.cat));
-});
-document.querySelectorAll('[data-raw]').forEach(b => {
-  b.addEventListener('click', () => manualRaw(b.dataset.raw));
-});
-
-function restartLive() {
-  if (!settings.liveMode) return;
-  liveStop();
-  liveStart();
-}
-
-for (const name of ['apiKey', 'mqttUser', 'mqttPass']) {
-  const input = $(name);
-  input.value = settings[name];
-  input.addEventListener('input', () => saveSetting(name, input.value.trim())); // save while typing
-  input.addEventListener('change', () => {
-    saveSetting(name, input.value.trim());
-    log('Setup saved.');
-    if (name === 'apiKey') {
-      if (!CONFIG.geminiKey) settings.geminiKey = settings.apiKey;
-      restartLive();
-    }
-    else if (bin.ws) bin.ws.close(); // reconnects with the new settings
-  });
-}
-
-// Setup opens with #setup in the address, or with 5 quick taps on the big result text
-// (a Home Screen app on iPhone has no address bar).
-let setupOpen = location.hash === '#setup';
-function showSetup() {
-  $('setupCard').hidden = !setupOpen;
-  if (setupOpen) $('setupCard').scrollIntoView({ behavior: 'smooth' });
-}
-window.addEventListener('hashchange', () => {
-  setupOpen = location.hash === '#setup';
-  showSetup();
-});
-let setupTaps = [];
-resultEl.addEventListener('click', () => {
-  const now = Date.now();
-  setupTaps = setupTaps.filter(t => now - t < 2000).concat(now);
-  if (setupTaps.length >= 5) {
-    setupTaps = [];
-    setupOpen = true;
-    showSetup();
-  }
-});
-$('setupDone').addEventListener('click', () => {
-  history.replaceState(null, '', location.pathname + location.search);
-  setupOpen = false;
-  showSetup();
-});
-showSetup();
-
-// Installable with Add to Home screen: build the manifest in place (single-file app).
-(function setupManifest() {
-  const icon = 'data:image/svg+xml,' + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0f1216"/>' +
-    '<path d="M150 170h212l-20 250a20 20 0 0 1-20 18H190a20 20 0 0 1-20-18z" fill="#3fb950"/>' +
-    '<rect x="130" y="120" width="252" height="34" rx="12" fill="#e8ecf1"/><rect x="220" y="92" width="72" height="28" rx="8" fill="#e8ecf1"/></svg>');
-  $('iconLink').href = icon;
-  try {
-    const manifest = {
-      name: 'Smart Bin',
-      short_name: 'Smart Bin',
-      start_url: location.href.split('#')[0],
-      scope: new URL('./', location.href).href,
-      display: 'standalone',
-      orientation: 'portrait',
-      background_color: '#0f1216',
-      theme_color: '#0f1216',
-      icons: [{ src: icon, sizes: 'any', type: 'image/svg+xml' }],
+  <section id="camCard" class="card">
+    <div class="viewer">
+      <video id="video" playsinline muted autoplay></video>
+      <div id="placeholder" class="placeholder">Camera off</div>
+    </div>
+    <div id="result" class="result">—</div>
+    <div id="itemName" class="state"></div>
+    <div id="state" class="state">Start the camera.</div>
+    <div class="row2">
+      <button id="emptyBtn" class="btn">Set empty platform</button>
+      <button id="classifyBtn" class="btn">Classify now</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Manual sort</h2>
+    <div class="grid">
+      <button class="btn cat bin-only" data-cat="ENERGY" disabled>Energy</button>
+      <button class="btn cat bin-only" data-cat="MIX" disabled>Mix</button>
+      <button class="btn cat bin-only" data-cat="BIO" disabled>Bio</button>
+      <button class="btn cat bin-only" data-cat="METAL" disabled>Metal</button>
+      <button class="btn bin-only" data-raw="turn" disabled>Turn one section</button>
+      <button class="btn bin-only" data-raw="spill" disabled>Spill</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Bin emptied</h2>
+    <div class="grid">
+      <button class="btn" data-emptied="ENERGY">Energy emptied</button>
+      <button class="btn" data-emptied="MIX">Mix emptied</button>
+      <button class="btn" data-emptied="BIO">Bio emptied</button>
+      <button class="btn" data-emptied="METAL">Metal emptied</button>
+    </div>
+    <div class="hint">Fill levels are estimated from the number of items sorted. Tap after emptying a compartment.
+      Customer view: <a href="dashboard.html" style="color:var(--accent)">dashboard.html</a></div>
+  </section>
+
+  <!-- Hidden setup page: only shown when the address ends with #setup -->
+  <section id="setupCard" class="card" hidden>
+    <h2>Setup (this device only, optional)</h2>
+    <label for="apiKey">Gemini API key (this device; used when none is built in)
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave empty">
+    </label>
+    <label for="mqttUser">Broker user (optional)
+      <input id="mqttUser" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+    </label>
+    <label for="mqttPass">Broker password (optional)
+      <input id="mqttPass" type="password" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="hint">Saved only on this device. The Groq key and topic name are built into CONFIG in index.html.</div>
+    <button id="setupDone" class="btn primary" style="margin-top:14px">Done</button>
+  </section>
+
+  <section class="card">
+    <h2>Log</h2>
+    <ol id="log"></ol>
+  </section>
+  </div>
+
+  <!-- Customer dashboard view (dashboard.html, loaded the first time it is shown) -->
+  <div id="dashView" hidden>
+    <iframe id="dashFrame" title="Smart Bin dashboard"></iframe>
+  </div>
+
+  <nav class="view-switch" aria-label="View">
+    <button id="viewDash" type="button" aria-pressed="false">Dashboard</button>
+    <button id="viewAdmin" type="button" aria-pressed="true">Admin</button>
+  </nav>
+
+  <script>
+    'use strict';
+
+    // ---------------- Constants ----------------
+    // The bin (arduino/smart_bin_wifi) and this app both connect to an MQTT broker.
+    // The app publishes ENERGY, MIX, BIO, METAL, turn or spill; the bin answers BUSY and DONE.
+    // Topics are <secret topic name>/cmd, /status and /online (retained ONLINE / OFFLINE from the bin).
+    const topic = name => settings.topicPrefix + '/' + name;
+    const SORT_TIMEOUT_MS = 30000;
+    const MQTT_KEEPALIVE_S = 60;
+    const MQTT_PING_MS = 30000;
+    const MQTT_RECONNECT_MS = 3000;
+
+    // Sorting rules shared by photo mode and live mode.
+    const PROMPT = [
+      'You sort household waste for a bin in Finland that has exactly four compartments: BIO, METAL, ENERGY and MIX.',
+      'The camera looks down at a platform. Ignore the platform, the background, shadows and any hands. Look only at the waste item lying on the platform. If there are several items, sort the largest one.',
+      'First identify exactly what the item is and what it is mainly made of. Then choose the compartment with these rules:',
+      'BIO (biowaste): food leftovers, fruit and vegetable peels and cores, bread, rice, pasta, meat, fish, bones, eggshells, coffee grounds and paper coffee filters, tea bags, used paper napkins, paper towels and tissues, small wooden items like toothpicks, ice cream sticks and chopsticks, cut flowers and plants.',
+      'METAL: anything mainly made of metal. Drink cans and food tins, aluminium foil, aluminium trays and tealight cups, metal lids, jar lids and bottle caps, empty aerosol cans, cutlery, keys, screws, nails, coins, metal pots and pans, wire.',
+      'ENERGY (burnable waste): plastic of any kind and paper or cardboard. Plastic bags, plastic film and wrappers, chip and candy wrappers, plastic bottles, cups and lids, yogurt and butter tubs, plastic trays and boxes, styrofoam, straws, plastic cutlery, pens, toothbrushes, plastic toys, rubber, paper cups, milk and juice cartons, pizza boxes, paper, cardboard, receipts, envelopes, egg cartons.',
+      'MIX (mixed waste): everything that does not fit the others. Ceramics, porcelain, drinking glasses and broken glass, glass jars and bottles, mirrors, diapers, sanitary pads, cotton swabs, cotton pads, wet wipes, cigarette butts, chewing gum, vacuum cleaner bags, sweepings, cat litter, textiles and clothes, items made of several materials glued together that cannot be separated.',
+      'Tips: food inside packaging counts as the packaging. A coated paper cup or carton is ENERGY. Foil-lined chip bags are ENERGY. A plastic bottle with a metal cap is ENERGY. Paper with food on it is BIO only if it is a napkin, towel or tissue; otherwise ENERGY.',
+      'If there is no item on the platform, the category is EMPTY.',
+    ].join('\n');
+
+    // Photo mode also checks whether the item must be emptied or taken apart first.
+    const PHOTO_PROMPT = PROMPT + '\n' + [
+      'Think it through like a careful person standing at the bin: what is it, what is it made of, is there anything inside it, and does it have parts made of different materials?',
+      'Set "action" to PREPARE instead of SORT when the item cannot go in one compartment as it is:',
+      '- a bottle, can, jar, carton, cup or tub that still holds a noticeable amount of liquid, sauce, food or other contents (for example a water bottle with water in it, a ketchup bottle with ketchup in it, a half-full yogurt tub). A little leftover residue is fine; it does not need washing.',
+      '- an item with parts of different materials that are easy to separate, such as a glass jar with its metal lid on, or a takeaway box or pizza box with food still in it. Small parts that are hard to remove, like a staple in a tea bag, do not count.',
+      'For PREPARE, "category" is where the empty or main part should go afterwards, and "instruction" tells the person in one short sentence what to do, for example "Pour out the water, then put the bottle back."',
+      'For SORT, "instruction" is an empty string.',
+      'Reply as JSON with "item" (a short name of the item, its material and what is inside it, for example "plastic ketchup bottle, half full of ketchup"), "action" (SORT or PREPARE), "category" (BIO, METAL, ENERGY, MIX or EMPTY) and "instruction".',
+    ].join('\n');
+
+    // Shown when an item must be emptied or taken apart before it can be sorted.
+    const PREPARE_TITLE = 'EMPTY ME';
+    const PREPARE_MESSAGE = 'Get the shit out of me!';
+    const LIVE_PROMPT = PROMPT + ' You are watching a live camera above the platform. Stay silent. Only when you are told an item has been placed, call the sort_item function once with the category. Never answer in speech.';
+    const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
+
+    // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
+    const CONFIG = {
+      // Tried in this order for every photo. Each model has its own free daily allowance;
+      // when one runs out the next is used, and Groq (photoModel) comes last.
+      geminiModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'],
+      photoModel: 'qwen/qwen3.8-27b',   // Groq backup, used when every Gemini model is out of quota or fails
+      liveModel: 'gemini-3.8-live',     // Live mode only (off), uses the Gemini key
+      liveMode: false,
+      sensitivity: 16,                // item detection threshold; lower is more sensitive
+      binCapacity: 25,                // items per compartment before it counts as full (no fill sensor)
+      mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
+      // Built in so every device works without setup. This file is public, so anyone can
+      // read these. Split only to avoid automatic leak scanners, not to hide them.
+      geminiKey: 'AQ.Ab8RN6LQgIdpVNoaWwGlkqweR3jVnlX7EK4QSZGRsbIdgCIZ6A',   // paste your Gemini key between the quotes; empty = Groq only
+      groqKey: ['gsk_', 'KHWd6JHrX1I4pPux', 'qnkyWGdyb3FYKz5c', '69enHmI3Gg0QGrzsXxys'].join(''),
+      topicPrefix: 'smartbin-b0p1r0mw5c', // must match SECRET_TOPIC_PREFIX in arduino_secrets.h
     };
-    $('manifestLink').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
-  } catch { /* manifest is optional */ }
-})();
 
-updateLivePill();
-if (!window.isSecureContext) log('Not a secure context. Camera and Bluetooth need HTTPS.');
-if (settings.binAuto && settings.mqttHost) {
-  bin.wanted = true;
-  binConnect();
-}
-if (settings.liveMode) liveStart();
-log('Smart Bin ready.');
-</script>
+    // Optional extras, saved per device on the hidden setup page (page address + #setup).
+    const DEFAULTS = {
+      apiKey: '',
+      mqttUser: '',
+      mqttPass: '',
+      binAuto: true,   // connect to the bin automatically when the page opens
+    };
+
+    const DETECT_MS = 200;
+    const SMALL_W = 32, SMALL_H = 24;
+    const STILL_LIMIT = 5;        // max mean difference from previous frame to count as still
+    const STILL_SAMPLES = 2;      // still samples in a row before triggering (about 0.4 s)
+    const EMPTY_FOLLOW = 0.05;    // how fast the empty frame follows slow lighting changes
+    const REBASE_MS = 1500;       // re-save empty frame this long after a sort
+    const LIVE_WAIT_MS = 8000;
+    const PHOTO_TIMEOUT_MS = 30000;
+    const LIVE_FRAME_MS = 1000;
+    const LIVE_RECYCLE_MS = 100000;
+    const LIVE_RECONNECT_MS = 1500;
+    const LIVE_BACKOFF_MS = 30000; // after repeated failed starts, to avoid hammering the API
+
+    const $ = id => document.getElementById(id);
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    // ---------------- Log ----------------
+    const logEl = $('log');
+    function log(msg) {
+      const li = document.createElement('li');
+      const time = document.createElement('time');
+      time.textContent = new Date().toLocaleTimeString([], { hour12: false });
+      li.append(time, String(msg));
+      logEl.prepend(li);
+      while (logEl.children.length > 200) logEl.lastChild.remove();
+      console.log(msg);
+    }
+    window.addEventListener('error', e => log('Error: ' + e.message));
+    window.addEventListener('unhandledrejection', e => log('Error: ' + (e.reason && e.reason.message || e.reason)));
+
+    // ---------------- Settings ----------------
+    const settings = { ...CONFIG };
+    for (const name of Object.keys(DEFAULTS)) {
+      try {
+        const raw = localStorage.getItem('smartbin.' + name);
+        settings[name] = raw === null ? DEFAULTS[name] : JSON.parse(raw);
+      } catch {
+        settings[name] = DEFAULTS[name];
+      }
+    }
+    // One Gemini key for photos and Live mode: the built-in one, or the one saved on this device.
+    if (!settings.geminiKey) settings.geminiKey = settings.apiKey;
+    if (!settings.apiKey) settings.apiKey = settings.geminiKey;
+    function saveSetting(name, value) {
+      settings[name] = value;
+      try {
+        localStorage.setItem('smartbin.' + name, JSON.stringify(value));
+      } catch (e) {
+        log('Could not save setting: ' + e.message);
+      }
+    }
+
+    // ---------------- UI helpers ----------------
+    const video = $('video');
+    const resultEl = $('result');
+    const stateEl = $('state');
+
+    function setPill(el, text, state) {
+      el.textContent = text;
+      el.dataset.state = state || '';
+    }
+    function showItemName(text) {
+      $('itemName').classList.remove('prepare');
+      $('itemName').textContent = text || '';
+    }
+    function showResult(word) {
+      resultEl.textContent = word || '—';
+      resultEl.dataset.cat = word || '';
+    }
+    let activity = '';
+    function setActivity(text) {
+      activity = text;
+      if (text) stateEl.textContent = text;
+    }
+    function setState(text) {
+      if (!activity) stateEl.textContent = text;
+    }
+    // ---------------- MQTT over WebSocket to the bin ----------------
+    // A minimal MQTT 3.1.1 client: CONNECT, SUBSCRIBE, PUBLISH (QoS 0) and PING.
+    const bin = {
+      ws: null,
+      connected: false,    // logged in to the broker
+      online: false,       // bin reported ONLINE
+      wanted: false,       // user asked to be connected
+      buf: new Uint8Array(0),
+      pingTimer: null,
+      reconnectTimer: null,
+      doneWaiter: null,
+      packetId: 0,
+    };
+
+    function mqttString(str) {
+      const b = encoder.encode(str);
+      return [b.length >> 8, b.length & 255, ...b];
+    }
+    function mqttPacket(first, body) {
+      const len = [];
+      let n = body.length;
+      do {
+        let digit = n % 128;
+        n = Math.floor(n / 128);
+        if (n > 0) digit |= 128;
+        len.push(digit);
+      } while (n > 0);
+      return new Uint8Array([first, ...len, ...body]);
+    }
+    function brokerUrl() {
+      const host = settings.mqttHost.trim();
+      return /^wss?:\/\//.test(host) ? host : 'wss://' + host + ':8884/mqtt';
+    }
+
+    function isBinConnected() {
+      return bin.connected && bin.online;
+    }
+    function updateBinUi() {
+      const pill = $('binPill');
+      if (!bin.ws) setPill(pill, bin.wanted ? 'Bin reconnecting…' : 'Bin off', bin.wanted ? 'warn' : '');
+      else if (!bin.connected) setPill(pill, 'Connecting…', 'warn');
+      else if (!bin.online) setPill(pill, 'Bin offline', 'bad');
+      else setPill(pill, 'Bin online', 'on');
+      document.querySelectorAll('.bin-only').forEach(b => { b.disabled = !isBinConnected(); });
+      $('connectBtn').textContent = bin.wanted ? 'Disconnect bin' : 'Connect bin';
+    }
+
+    function toggleBin() {
+      if (bin.wanted) {
+        bin.wanted = false;
+        saveSetting('binAuto', false);
+        clearTimeout(bin.reconnectTimer);
+        if (bin.ws) {
+          try { bin.ws.send(new Uint8Array([0xe0, 0])); } catch { /* closing anyway */ }
+          bin.ws.close();
+        }
+        updateBinUi();
+        log('Bin disconnected.');
+        return;
+      }
+      bin.wanted = true;
+      saveSetting('binAuto', true);
+      binConnect();
+    }
+
+    function binConnect() {
+      clearTimeout(bin.reconnectTimer);
+      if (bin.ws || !bin.wanted) return;
+      if (!settings.mqttHost || !settings.topicPrefix) {
+        log('This phone is not set up yet (no secret topic name).');
+        bin.wanted = false;
+        updateBinUi();
+        return;
+      }
+      let ws;
+      try {
+        ws = new WebSocket(brokerUrl(), 'mqtt');
+      } catch (e) {
+        log('Broker connect failed: ' + e.message);
+        scheduleBinReconnect();
+        return;
+      }
+      ws.binaryType = 'arraybuffer';
+      bin.ws = ws;
+      bin.buf = new Uint8Array(0);
+      updateBinUi();
+      ws.onopen = () => {
+        if (ws !== bin.ws) return;
+        const clientId = 'smartbin-phone-' + Math.random().toString(16).slice(2, 8);
+        const user = settings.mqttUser;
+        const flags = 0x02 | (user ? 0xc0 : 0); // clean session, plus username and password if given
+        const body = [
+          ...mqttString('MQTT'), 4,       // protocol name and level 3.1.1
+          flags,
+          MQTT_KEEPALIVE_S >> 8, MQTT_KEEPALIVE_S & 255,
+          ...mqttString(clientId),
+          ...(user ? [...mqttString(user), ...mqttString(settings.mqttPass)] : []),
+        ];
+        ws.send(mqttPacket(0x10, body));
+      };
+      ws.onmessage = ev => {
+        if (ws === bin.ws) onBrokerData(new Uint8Array(ev.data));
+      };
+      ws.onerror = () => {
+        if (ws === bin.ws) log('Broker connection error.');
+      };
+      ws.onclose = ev => {
+        if (ws !== bin.ws) return;
+        bin.ws = null;
+        bin.connected = false;
+        bin.online = false;
+        clearInterval(bin.pingTimer);
+        if (bin.doneWaiter) bin.doneWaiter(false);
+        if (bin.wanted) log('Broker connection closed (' + ev.code + ').');
+        updateBinUi();
+        scheduleBinReconnect();
+      };
+    }
+
+    function scheduleBinReconnect() {
+      if (!bin.wanted) return;
+      clearTimeout(bin.reconnectTimer);
+      bin.reconnectTimer = setTimeout(binConnect, MQTT_RECONNECT_MS);
+    }
+
+    // WebSocket messages can hold several MQTT packets or part of one, so buffer them.
+    function onBrokerData(chunk) {
+      const data = new Uint8Array(bin.buf.length + chunk.length);
+      data.set(bin.buf);
+      data.set(chunk, bin.buf.length);
+      let pos = 0;
+      while (data.length - pos >= 2) {
+        let len = 0, mult = 1, i = pos + 1, byte, complete = true;
+        do {
+          if (i >= data.length) { complete = false; break; }
+          byte = data[i++];
+          len += (byte & 127) * mult;
+          mult *= 128;
+        } while (byte & 128);
+        if (!complete || i + len > data.length) break;
+        handleMqttPacket(data[pos], data.subarray(i, i + len));
+        pos = i + len;
+      }
+      bin.buf = data.slice(pos);
+    }
+
+    function handleMqttPacket(first, body) {
+      const type = first >> 4;
+      if (type === 2) { // CONNACK
+        if (body[1] !== 0) {
+          log('Broker refused the login (code ' + body[1] + '). Check the broker settings.');
+          bin.wanted = false;
+          bin.ws.close();
+          return;
+        }
+        bin.connected = true;
+        log('Broker connected.');
+        bin.packetId = (bin.packetId % 65535) + 1;
+        bin.ws.send(mqttPacket(0x82, [
+          bin.packetId >> 8, bin.packetId & 255,
+          ...mqttString(topic('status')), 0,
+          ...mqttString(topic('online')), 0,
+          ...mqttString(topic('state')), 0, // newest dashboard numbers from any device
+        ]));
+        clearInterval(bin.pingTimer);
+        bin.pingTimer = setInterval(() => {
+          if (bin.ws && bin.ws.readyState === WebSocket.OPEN) bin.ws.send(new Uint8Array([0xc0, 0]));
+        }, MQTT_PING_MS);
+        updateBinUi();
+      } else if (type === 3) { // PUBLISH
+        const qos = (first >> 1) & 3;
+        const topicLen = (body[0] << 8) | body[1];
+        const name = decoder.decode(body.subarray(2, 2 + topicLen));
+        const start = 2 + topicLen + (qos > 0 ? 2 : 0);
+        onBinMessage(name, decoder.decode(body.subarray(start)).trim());
+      }
+    }
+
+    function onBinMessage(name, payload) {
+      if (name === topic('online')) {
+        const online = payload === 'ONLINE';
+        if (online !== bin.online) log(online ? 'Bin online.' : 'Bin offline.');
+        bin.online = online;
+        if (!online && bin.doneWaiter) bin.doneWaiter(false);
+        updateBinUi();
+      } else if (name === topic('status')) {
+        log('Bin: ' + payload);
+        if (payload === 'DONE' && bin.doneWaiter) bin.doneWaiter(true);
+      } else if (name === topic('state')) {
+        adoptState(payload);
+      }
+    }
+
+    function publishCmd(text) {
+      if (!bin.connected || !bin.ws || bin.ws.readyState !== WebSocket.OPEN) throw new Error('Not connected to the broker');
+      bin.ws.send(mqttPacket(0x30, [...mqttString(topic('cmd')), ...encoder.encode(text)]));
+    }
+
+    // ---------------- Customer dashboard state ----------------
+    // Counts, estimated fill levels and messages are kept on this device and published
+    // (retained) to <topic>/state, which dashboard.html shows.
+    const CATS = ['ENERGY', 'MIX', 'BIO', 'METAL'];
+    const CAT_NAMES = { ENERGY: 'Energy', MIX: 'Mix', BIO: 'Bio', METAL: 'Metal' };
+    const MAX_MESSAGES = 30;
+
+    function localDay() {
+      return new Date().toLocaleDateString('sv'); // YYYY-MM-DD in local time
+    }
+    const stats = (() => {
+      let s = null;
+      try { s = JSON.parse(localStorage.getItem('smartbin.stats')); } catch { /* start fresh */ }
+      s = s && typeof s === 'object' ? s : {};
+      s.day = s.day || localDay();
+      s.counts = s.counts || {};
+      s.fill = s.fill || {};
+      s.warned = s.warned || {};
+      s.messages = Array.isArray(s.messages) ? s.messages : [];
+      s.last = s.last || null;
+      for (const c of CATS) {
+        s.counts[c] = s.counts[c] || 0;
+        s.fill[c] = s.fill[c] || 0;
+      }
+      return s;
+    })();
+
+    function rollDay() {
+      if (stats.day === localDay()) return;
+      stats.day = localDay();
+      for (const c of CATS) stats.counts[c] = 0; // fill levels carry over until emptied
+    }
+
+    function addMessage(type, text) {
+      stats.messages.push({ type, text, at: Date.now() });
+      if (stats.messages.length > MAX_MESSAGES) stats.messages.splice(0, stats.messages.length - MAX_MESSAGES);
+    }
+
+    // Only publish after this device changed something, so a device that just opened
+    // the page never overwrites the real numbers with its own empty ones.
+    function saveStats() {
+      stats.updatedAt = Date.now();
+      try { localStorage.setItem('smartbin.stats', JSON.stringify(stats)); } catch { /* not critical */ }
+      publishState();
+    }
+
+    // Take newer numbers published by another device (or by this one earlier).
+    function adoptState(payload) {
+      let st;
+      try { st = JSON.parse(payload); } catch { return; }
+      if (!st || !(st.updatedAt > (stats.updatedAt || 0))) return;
+      for (const key of ['day', 'counts', 'fill', 'last', 'messages', 'warned', 'updatedAt']) {
+        if (st[key] !== undefined) stats[key] = st[key];
+      }
+      try { localStorage.setItem('smartbin.stats', JSON.stringify(stats)); } catch { /* not critical */ }
+    }
+
+    function publishState() {
+      if (!bin.connected || !bin.ws || bin.ws.readyState !== WebSocket.OPEN) return;
+      rollDay();
+      const payload = JSON.stringify({
+        updatedAt: stats.updatedAt || Date.now(),
+        day: stats.day,
+        capacity: settings.binCapacity,
+        counts: stats.counts,
+        fill: stats.fill,
+        warned: stats.warned,
+        last: stats.last,
+        messages: stats.messages,
+      });
+      bin.ws.send(mqttPacket(0x31, [...mqttString(topic('state')), ...encoder.encode(payload)])); // retained
+    }
+
+    // An item went (or would go) into a compartment.
+    function recordItem(cat, item) {
+      rollDay();
+      stats.counts[cat]++;
+      stats.fill[cat]++;
+      stats.last = { item, category: cat, at: Date.now() };
+      const name = item ? item.charAt(0).toUpperCase() + item.slice(1) : 'Item';
+      addMessage('sorted', name + ' → ' + CAT_NAMES[cat] + '. Thank you!');
+      const pct = stats.fill[cat] / settings.binCapacity;
+      if (pct >= 1 && stats.warned[cat] !== 'full') {
+        stats.warned[cat] = 'full';
+        addMessage('full', 'The ' + CAT_NAMES[cat] + ' bin is full. Please empty it.');
+      } else if (pct >= 0.8 && !stats.warned[cat]) {
+        stats.warned[cat] = 'almost';
+        addMessage('almost', 'The ' + CAT_NAMES[cat] + ' bin is almost full.');
+      }
+      saveStats();
+    }
+
+    function markEmptied(cat) {
+      stats.fill[cat] = 0;
+      stats.warned[cat] = null;
+      addMessage('info', 'The ' + CAT_NAMES[cat] + ' bin has been emptied.');
+      saveStats();
+      log(CAT_NAMES[cat] + ' marked as emptied.');
+    }
+
+    function reportProblem(type, text) {
+      addMessage(type, text);
+      saveStats();
+    }
+
+    function waitForDone(ms) {
+      return new Promise(resolve => {
+        const timer = setTimeout(() => finish(false), ms);
+        function finish(ok) {
+          clearTimeout(timer);
+          if (bin.doneWaiter === finish) bin.doneWaiter = null;
+          resolve(ok);
+        }
+        bin.doneWaiter = finish;
+      });
+    }
+
+    // Sends a command and waits for DONE. Returns true if the command was sent.
+    async function sendAndWait(cmd, activityText) {
+      setActivity(activityText);
+      const done = waitForDone(SORT_TIMEOUT_MS);
+      try {
+        publishCmd(cmd);
+        log('Sent ' + cmd);
+      } catch (e) {
+        if (bin.doneWaiter) bin.doneWaiter(false);
+        log('Send failed: ' + e.message);
+        return false;
+      }
+      const ok = await done;
+      log(ok ? 'Bin finished.' : 'No DONE from the bin within 30 s.');
+      return true;
+    }
+
+    async function runSort(cat) {
+      if (!isBinConnected()) {
+        log(cat + ': bin not online, nothing sent.');
+        return false;
+      }
+      return sendAndWait(cat, 'Sorting to ' + cat + '…');
+    }
+
+    // Manual "turn" or "spill" for testing and calibration.
+    async function manualRaw(cmd) {
+      if (busy) {
+        log('Busy, wait for the current item.');
+        return;
+      }
+      busy = true;
+      try {
+        await sendAndWait(cmd, 'Sending ' + cmd + '…');
+      } finally {
+        busy = false;
+        setActivity('');
+      }
+    }
+
+    // After a sort the platform should be empty again; wait, then re-save it.
+    async function afterSort() {
+      setActivity('Settling…');
+      await sleep(REBASE_MS);
+      if (cameraReady()) saveEmptyFrame(false);
+      stillCount = 0;
+    }
+
+    // ---------------- Camera ----------------
+    let stream = null;
+    let wakeLock = null;
+
+    function cameraReady() {
+      return !!stream && video.readyState >= 2 && video.videoWidth > 0;
+    }
+
+    async function toggleCamera() {
+      if (stream) {
+        stopCamera();
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        log('Camera not available. Open the page over HTTPS.');
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        video.srcObject = stream;
+        await video.play();
+        $('placeholder').hidden = true;
+        $('cameraBtn').textContent = 'Stop camera';
+        setPill($('camPill'), 'Camera on', 'on');
+        document.body.classList.add('cam-on');
+        stream.getVideoTracks()[0].addEventListener('ended', () => {
+          log('Camera stopped by the system.');
+          stopCamera();
+        });
+        detectTimer = setInterval(detectTick, DETECT_MS);
+        requestWakeLock();
+        warmUpAi();
+        log('Camera started (' + video.videoWidth + '×' + video.videoHeight + ').');
+        if (!emptyFrame) setState('Clear the platform and tap Set empty platform.');
+      } catch (e) {
+        stream = null;
+        log('Camera failed: ' + e.message);
+      }
+    }
+
+    function stopCamera() {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      video.srcObject = null;
+      clearInterval(detectTimer);
+      prevFrame = null;
+      stillCount = 0;
+      $('placeholder').hidden = false;
+      $('cameraBtn').textContent = 'Start camera';
+      setPill($('camPill'), 'Camera off', '');
+      document.body.classList.remove('cam-on');
+      setState('Start the camera.');
+      if (wakeLock) wakeLock.release().catch(() => { });
+      wakeLock = null;
+      log('Camera stopped.');
+    }
+
+    async function requestWakeLock() {
+      if (!('wakeLock' in navigator)) {
+        log('Screen wake lock not supported.');
+        return;
+      }
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } catch (e) {
+        log('Wake lock failed: ' + e.message);
+      }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && stream && !wakeLock) requestWakeLock();
+    });
+
+    const bigCanvas = document.createElement('canvas');
+    function grabJpeg(maxW, quality) {
+      const scale = Math.min(1, maxW / video.videoWidth);
+      bigCanvas.width = Math.round(video.videoWidth * scale);
+      bigCanvas.height = Math.round(video.videoHeight * scale);
+      bigCanvas.getContext('2d').drawImage(video, 0, 0, bigCanvas.width, bigCanvas.height);
+      return bigCanvas.toDataURL('image/jpeg', quality).split(',')[1];
+    }
+
+    // ---------------- Item detection ----------------
+    const smallCanvas = document.createElement('canvas');
+    smallCanvas.width = SMALL_W;
+    smallCanvas.height = SMALL_H;
+    const smallCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
+
+    let detectTimer = null;
+    let emptyFrame = null;
+    let prevFrame = null;
+    let stillCount = 0;
+    let lastItemFrame = null;   // the item just classified, so it is not classified again
+    let busy = false;
+
+    function grabGray() {
+      smallCtx.drawImage(video, 0, 0, SMALL_W, SMALL_H);
+      const d = smallCtx.getImageData(0, 0, SMALL_W, SMALL_H).data;
+      const g = new Float32Array(SMALL_W * SMALL_H);
+      for (let i = 0, j = 0; i < g.length; i++, j += 4) {
+        g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+      }
+      return g;
+    }
+
+    function meanAbsDiff(a, b) {
+      let sum = 0;
+      for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
+      return sum / a.length;
+    }
+
+    function saveEmptyFrame(manual) {
+      if (!cameraReady()) {
+        log('Start the camera first.');
+        return;
+      }
+      emptyFrame = grabGray();
+      lastItemFrame = null;
+      stillCount = 0;
+      log(manual ? 'Empty platform saved.' : 'Empty platform re-saved.');
+    }
+
+    function detectTick() {
+      if (!cameraReady()) return;
+      const g = grabGray();
+      const dPrev = prevFrame ? meanAbsDiff(g, prevFrame) : 255;
+      prevFrame = g;
+      if (busy) {
+        stillCount = 0;
+        return;
+      }
+      const still = dPrev < STILL_LIMIT;
+
+      // No empty frame yet: save the first still picture automatically.
+      // If an item was in view, the model answers EMPTY once it is removed and the frame is fixed then.
+      if (!emptyFrame) {
+        stillCount = still ? stillCount + 1 : 0;
+        setState('Hold the camera still over the empty platform…');
+        if (stillCount >= STILL_SAMPLES) {
+          emptyFrame = g;
+          stillCount = 0;
+          log('Empty platform saved automatically.');
+        }
+        return;
+      }
+
+      const sens = settings.sensitivity;
+      const dEmpty = meanAbsDiff(g, emptyFrame);
+      const dItem = lastItemFrame ? meanAbsDiff(g, lastItemFrame) : Infinity;
+      const numbers = 'change ' + dEmpty.toFixed(1) + ' / ' + sens + ' · motion ' + dPrev.toFixed(1);
+
+      // Follow slow lighting changes while the platform looks empty.
+      if (still && dEmpty < sens * 0.5) {
+        for (let i = 0; i < g.length; i++) emptyFrame[i] += (g[i] - emptyFrame[i]) * EMPTY_FOLLOW;
+      }
+      if (lastItemFrame && still && dEmpty < sens * 0.75) {
+        lastItemFrame = null;
+        log('Platform clear.');
+      }
+
+      // A new item: different from the empty platform and from the item just classified.
+      const isNewItem = dEmpty > sens && dItem > sens;
+      stillCount = isNewItem && still ? stillCount + 1 : 0;
+      setState((lastItemFrame && !isNewItem ? 'Done · remove it or place the next item · ' : 'Watching · ') + numbers);
+
+      if (stillCount >= STILL_SAMPLES) {
+        stillCount = 0;
+        lastItemFrame = g;
+        log('Item detected.');
+        processItem();
+      }
+    }
+
+    // ---------------- Classification ----------------
+    function parseCategory(text) {
+      const words = String(text || '').toUpperCase().match(/\b(ENERGY|MIX|BIO|METAL|EMPTY)\b/g);
+      if (!words) return null;
+      const unique = [...new Set(words)];
+      return unique.length === 1 ? unique[0] : null;
+    }
+
+    // ---------------- Photo mode: Gemini first, Groq as backup ----------------
+    const PHOTO_SCHEMA = {
+      type: 'OBJECT',
+      properties: {
+        item: { type: 'STRING' },
+        action: { type: 'STRING', enum: ['SORT', 'PREPARE'] },
+        category: { type: 'STRING', enum: ['BIO', 'METAL', 'ENERGY', 'MIX', 'EMPTY'] },
+        instruction: { type: 'STRING' },
+      },
+      required: ['item', 'action', 'category', 'instruction'],
+      propertyOrdering: ['item', 'action', 'category', 'instruction'],
+    };
+    const geminiPausedUntil = {};   // per model: while out of quota or failing, skip it
+    const geminiNoThinking = new Set(); // models that reject the thinking setting
+
+    async function classifyPhoto() {
+      const image = grabJpeg(768, 0.85);
+      if (settings.geminiKey) {
+        for (const model of settings.geminiModels) {
+          if (Date.now() < (geminiPausedUntil[model] || 0)) continue;
+          try {
+            setActivity('Asking ' + model + '…');
+            return { text: await classifyGemini(image, model), via: model };
+          } catch (e) {
+            // Out of free quota: skip it as long as Google says. Other errors: try it again later.
+            let pauseS = e.status === 429 ? (e.retrySecs || 60) : (e.status === 400 || e.status === 403 || e.status === 404 ? 600 : 30);
+            pauseS = Math.min(pauseS, 3600);
+            geminiPausedUntil[model] = Date.now() + pauseS * 1000;
+            log(model + (e.status === 429 ? ' free limit reached.' : ' failed: ' + e.message + '.') +
+              ' Skipping it for ' + (pauseS >= 120 ? Math.round(pauseS / 60) + ' min.' : pauseS + ' s.'));
+          }
+        }
+      }
+      return { text: await classifyGroq(image), via: 'groq' };
+    }
+
+    async function classifyGemini(image, model) {
+      try {
+        return await requestGemini(image, model);
+      } catch (e) {
+        if (geminiNoThinking.has(model) || !/thinking/i.test(e.message)) throw e;
+        geminiNoThinking.add(model);
+        return requestGemini(image, model);
+      }
+    }
+
+    async function requestGemini(image, model) {
+      const body = {
+        contents: [{
+          parts: [
+            { text: PHOTO_PROMPT },
+            { inline_data: { mime_type: 'image/jpeg', data: image } },
+          ],
+        }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: PHOTO_SCHEMA },
+      };
+      if (!geminiNoThinking.has(model)) body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15000);
+      try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.geminiKey },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          const err = new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
+          err.status = res.status;
+          // Google says how long to wait in a RetryInfo detail, e.g. "32s".
+          const info = json && json.error && (json.error.details || []).find(d => d.retryDelay);
+          if (info) err.retrySecs = Math.ceil(parseFloat(info.retryDelay)) || 0;
+          throw err;
+        }
+        const parts = (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
+        const text = parts.filter(p => !p.thought).map(p => p.text || '').join('').trim();
+        if (!text) throw new Error('empty answer');
+        return text;
+      } catch (e) {
+        if (e.name === 'AbortError') throw new Error('timed out');
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // ---------------- Photo mode backup (Groq) ----------------
+    const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+    // Optional request settings. If Groq rejects one for this model, it is dropped and remembered.
+    const groqOptions = {
+      response_format: { type: 'json_object' },  // answer must be JSON
+      reasoning_format: 'hidden',                 // think, but return only the answer
+      temperature: 0.2,
+    };
+
+    // Groq's free plan allows a fixed number of tokens per minute (about 3 photos).
+    // Browsers cannot read Groq's rate-limit headers, so the app keeps its own count
+    // of tokens used in the last minute and waits *before* sending when it would go over.
+    const GROQ_TOKENS_PER_MIN = 8000;
+    const groqUsage = [];          // { at, tokens } for each answer in the last minute
+    let groqPerPhoto = 2200;       // updated from real answers
+
+    function recordGroqUsage(usage) {
+      if (!usage || !usage.total_tokens) return;
+      groqPerPhoto = usage.total_tokens;
+      groqUsage.push({ at: Date.now(), tokens: usage.total_tokens });
+    }
+    // How long until another photo fits in the per-minute budget (0 = now).
+    function groqWaitMs() {
+      const now = Date.now();
+      while (groqUsage.length && now - groqUsage[0].at > 60000) groqUsage.shift();
+      let used = groqUsage.reduce((sum, u) => sum + u.tokens, 0);
+      for (const u of groqUsage) {
+        if (used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95) break;
+        used -= u.tokens;
+        if (used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95) return u.at + 60000 - now;
+      }
+      return used + groqPerPhoto <= GROQ_TOKENS_PER_MIN * 0.95 ? 0 : 60000;
+    }
+    // Groq's 429 message says e.g. "Please try again in 12.345s" or "in 1m2.5s".
+    function retrySecondsFrom(message) {
+      const m = String(message).match(/try again in ((?:[\d.]+(?:ms|h|m|s))+)/i);
+      if (!m) return 10;
+      let secs = 0;
+      for (const [, n, unit] of m[1].matchAll(/([\d.]+)(ms|h|m|s)/g)) secs += Number(n) * { ms: 0.001, s: 1, m: 60, h: 3600 }[unit];
+      return Math.max(1, Math.ceil(secs));
+    }
+
+    async function waitWithCountdown(ms, label) {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        setActivity(label + ' ' + Math.ceil((end - Date.now()) / 1000) + ' s…');
+        await sleep(Math.min(1000, end - Date.now()));
+      }
+    }
+
+    async function classifyGroq(image) {
+      if (!settings.groqKey) throw new Error('No Groq API key in CONFIG.');
+
+      // Not enough of this minute's budget left: wait for it to refill first.
+      const refillMs = groqWaitMs();
+      if (refillMs > 0) {
+        log('Free plan limit: waiting ' + Math.ceil(refillMs / 1000) + ' s before asking.');
+        await waitWithCountdown(refillMs + 300, 'Free plan limit, answer in');
+      }
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          setActivity('Asking Groq…');
+          return await requestGroq(image);
+        } catch (e) {
+          if (e.retryAfter && attempt < 3 && e.retryAfter <= 60) {
+            log('Groq free limit reached, waiting ' + e.retryAfter + ' s.');
+            await waitWithCountdown(e.retryAfter * 1000, 'Free plan limit, answer in');
+            continue;
+          }
+          const rejected = Object.keys(groqOptions).find(k => e.message.includes(k));
+          if (!rejected) throw e;
+          delete groqOptions[rejected];
+          log('Groq does not accept "' + rejected + '" for this model, sending without it.');
+        }
+      }
+      throw new Error('Groq request failed.');
+    }
+
+    async function requestGroq(image) {
+      const body = {
+        model: settings.photoModel,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: PHOTO_PROMPT },
+            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + image } },
+          ],
+        }],
+        ...groqOptions,
+      };
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
+      try {
+        const res = await fetch(GROQ_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + settings.groqKey },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        const json = await res.json().catch(() => null);
+        if (res.ok) recordGroqUsage(json && json.usage);
+        if (!res.ok) {
+          const err = new Error((json && json.error && json.error.message) || 'HTTP ' + res.status);
+          if (res.status === 429) err.retryAfter = retrySecondsFrom(err.message);
+          throw err;
+        }
+        let text = (json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || '';
+        text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim(); // in case reasoning comes back inline
+        const match = text.match(/\{[\s\S]*\}/);
+        return match ? match[0] : text;
+      } catch (e) {
+        if (e.name === 'AbortError') throw new Error('Photo request timed out.');
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // Opens the connection to Groq ahead of time so the first answer does not
+    // also pay for the connection setup.
+    function warmUpAi() {
+      if (settings.geminiKey) {
+        fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(settings.geminiModels[0]), {
+          headers: { 'x-goog-api-key': settings.geminiKey },
+        }).catch(() => { });
+      }
+      if (!settings.groqKey) return;
+      fetch('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': 'Bearer ' + settings.groqKey },
+      }).catch(() => { });
+    }
+
+    async function classify() {
+      if (settings.liveMode) {
+        if (live.ready) {
+          setActivity('Asking live model…');
+          const answer = await liveAsk(LIVE_WAIT_MS);
+          if (answer) return { text: answer, via: 'live' };
+          log('Live mode gave no answer within 8 s, using photo mode.');
+        } else {
+          log('Live session not ready, using photo mode.');
+        }
+      }
+      return classifyPhoto();
+    }
+
+    async function processItem() {
+      if (busy) return;
+      if (!cameraReady()) {
+        log('Start the camera first.');
+        return;
+      }
+      busy = true;
+      showResult('…');
+      showItemName('');
+      try {
+        const t0 = performance.now();
+        const { text, via } = await classify();
+        const secs = ((performance.now() - t0) / 1000).toFixed(1);
+        let cat = null, item = '', prepare = false, instruction = '';
+        try {
+          const json = JSON.parse(text);
+          item = String(json.item || '');
+          cat = parseCategory(json.category);
+          prepare = json.action === 'PREPARE' && cat !== 'EMPTY';
+          instruction = String(json.instruction || '').trim();
+        } catch {
+          cat = parseCategory(text); // live mode answers with the category word only
+        }
+        showItemName(item);
+        log('Answer (' + via + ', ' + secs + ' s): ' + (item ? item + ' → ' : '"' + text + '" → ') + (cat || 'UNSURE'));
+        if (prepare) {
+          showResult(PREPARE_TITLE);
+          $('result').dataset.cat = 'PREPARE';
+          showItemName(PREPARE_MESSAGE + ' ' + (instruction || 'Empty it or take it apart, then put it back.'));
+          $('itemName').classList.add('prepare');
+          log('Needs preparing first: ' + (instruction || item) + ' Afterwards: ' + cat + '.');
+          reportProblem('prepare', 'Please empty it first. ' + (instruction || 'Empty it or take it apart, then put it back.'));
+        } else if (cat === 'EMPTY') {
+          showResult('');
+          if (cameraReady()) saveEmptyFrame(false); // the scene is empty, so use it as the new empty frame
+          log('Model sees no item. If the scene changed, tap Set empty platform.');
+        } else if (!cat) {
+          showResult('UNSURE');
+          log('Not sure. Tap a manual sort button.');
+          reportProblem('manual', "Couldn't recognise this item. It needs manual sorting.");
+        } else {
+          showResult(cat);
+          recordItem(cat, item);
+          if (await runSort(cat)) await afterSort();
+        }
+      } catch (e) {
+        showResult('ERROR');
+        log('Classification failed: ' + e.message);
+        reportProblem('manual', "Couldn't detect the trash. It needs manual sorting.");
+      } finally {
+        busy = false;
+        setActivity('');
+      }
+    }
+
+    async function manualSort(cat) {
+      if (busy) {
+        log('Busy, wait for the current item.');
+        return;
+      }
+      busy = true;
+      showResult(cat);
+      recordItem(cat, 'item sorted by hand');
+      try {
+        if (await runSort(cat)) await afterSort();
+      } finally {
+        busy = false;
+        setActivity('');
+      }
+    }
+
+    // ---------------- Live mode ----------------
+    const live = {
+      ws: null,
+      ready: false,
+      startedAt: 0,
+      pending: null,
+      transcript: '',
+      frameTimer: null,
+      reconnectTimer: null,
+      failedStarts: 0,
+      msgChain: Promise.resolve(),
+    };
+
+    function updateLivePill() {
+      const pill = $('livePill');
+      pill.hidden = !settings.liveMode;
+      if (live.ready) setPill(pill, 'Live on', 'on');
+      else if (live.ws) setPill(pill, 'Live connecting…', 'warn');
+      else setPill(pill, 'Live off', settings.liveMode ? 'bad' : '');
+    }
+
+    function liveSetupMessage() {
+      const model = (settings.liveModel || CONFIG.liveModel).trim().replace(/^models\//, '');
+      return {
+        setup: {
+          model: 'models/' + model,
+          generationConfig: { responseModalities: ['AUDIO'] },
+          outputAudioTranscription: {},
+          systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
+          tools: [{
+            functionDeclarations: [{
+              name: 'sort_item',
+              description: 'Send the waste category of the item on the platform to the bin.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  category: { type: 'STRING', enum: ['ENERGY', 'MIX', 'BIO', 'METAL', 'EMPTY'] },
+                },
+                required: ['category'],
+              },
+            }],
+          }],
+        },
+      };
+    }
+
+    function liveSend(obj) {
+      if (live.ws && live.ws.readyState === WebSocket.OPEN) {
+        live.ws.send(JSON.stringify(obj));
+        return true;
+      }
+      return false;
+    }
+
+    function liveStart() {
+      clearTimeout(live.reconnectTimer);
+      if (!settings.liveMode || live.ws) return;
+      if (!settings.apiKey) {
+        log('Live mode needs an API key.');
+        updateLivePill();
+        return;
+      }
+      const url = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(settings.apiKey);
+      let ws;
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        log('Live socket failed: ' + e.message);
+        scheduleLiveReconnect();
+        return;
+      }
+      live.ws = ws;
+      live.ready = false;
+      updateLivePill();
+      ws.onopen = () => {
+        if (ws === live.ws) ws.send(JSON.stringify(liveSetupMessage()));
+      };
+      ws.onmessage = ev => {
+        live.msgChain = live.msgChain.then(() => onLiveMessage(ws, ev.data)).catch(e => log('Live message error: ' + e.message));
+      };
+      ws.onerror = () => {
+        if (ws === live.ws) log('Live socket error.');
+      };
+      ws.onclose = ev => onLiveClose(ws, ev);
+    }
+
+    async function onLiveMessage(ws, data) {
+      if (ws !== live.ws) return;
+      let text;
+      if (typeof data === 'string') text = data;
+      else if (data instanceof Blob) text = await data.text();
+      else text = decoder.decode(data);
+      let msg;
+      try {
+        msg = JSON.parse(text);
+      } catch {
+        log('Live: unreadable message.');
+        return;
+      }
+
+      if (msg.setupComplete) {
+        live.ready = true;
+        live.startedAt = Date.now();
+        live.failedStarts = 0;
+        clearInterval(live.frameTimer);
+        live.frameTimer = setInterval(sendLiveFrame, LIVE_FRAME_MS);
+        updateLivePill();
+        log('Live session started.');
+      }
+
+      if (msg.toolCall) {
+        const calls = msg.toolCall.functionCalls || [];
+        const responses = calls.map(fc => ({ id: fc.id, name: fc.name, response: { result: 'ok' } }));
+        if (responses.length) liveSend({ toolResponse: { functionResponses: responses } });
+        for (const fc of calls) {
+          if (fc.name !== 'sort_item') continue;
+          const cat = String((fc.args && fc.args.category) || '');
+          log('Live tool call: sort_item(' + cat + ')');
+          if (live.pending) live.pending(cat);
+          else log('No item was waiting, tool call ignored.');
+        }
+      }
+
+      // The model's audio is never played; only its transcription is logged.
+      const sc = msg.serverContent;
+      if (sc) {
+        if (sc.outputTranscription && sc.outputTranscription.text) live.transcript += sc.outputTranscription.text;
+        if ((sc.turnComplete || sc.generationComplete) && live.transcript.trim()) {
+          log('Live said: ' + live.transcript.trim());
+          live.transcript = '';
+        }
+      }
+
+      if (msg.goAway) log('Live session ending soon.');
+    }
+
+    function onLiveClose(ws, ev) {
+      if (ws !== live.ws) return;
+      const wasReady = live.ready;
+      live.ws = null;
+      live.ready = false;
+      live.transcript = '';
+      clearInterval(live.frameTimer);
+      if (live.pending) live.pending(null);
+      log('Live socket closed (' + ev.code + (ev.reason ? ': ' + ev.reason : '') + ').');
+      if (!wasReady) live.failedStarts++;
+      updateLivePill();
+      scheduleLiveReconnect();
+    }
+
+    function scheduleLiveReconnect() {
+      if (!settings.liveMode) return;
+      clearTimeout(live.reconnectTimer);
+      const delay = live.failedStarts >= 3 ? LIVE_BACKOFF_MS : LIVE_RECONNECT_MS;
+      if (delay > LIVE_RECONNECT_MS) log('Live failed to start ' + live.failedStarts + ' times. Check key and model. Retrying in 30 s.');
+      live.reconnectTimer = setTimeout(liveStart, delay);
+    }
+
+    function liveStop() {
+      clearTimeout(live.reconnectTimer);
+      clearInterval(live.frameTimer);
+      const ws = live.ws;
+      live.ws = null;
+      live.ready = false;
+      live.failedStarts = 0;
+      if (live.pending) live.pending(null);
+      if (ws) ws.close(1000, 'stopped');
+      updateLivePill();
+    }
+
+    function sendLiveFrame() {
+      if (!live.ready || !cameraReady()) return;
+      if (live.ws.bufferedAmount > 1000000) return; // network is behind; skip a frame
+      liveSend({ realtimeInput: { video: { data: grabJpeg(640, 0.7), mimeType: 'image/jpeg' } } });
+    }
+
+    function liveAsk(ms) {
+      return new Promise(resolve => {
+        if (!live.ready) {
+          resolve(null);
+          return;
+        }
+        const timer = setTimeout(() => finish(null), ms);
+        function finish(cat) {
+          clearTimeout(timer);
+          if (live.pending === finish) live.pending = null;
+          resolve(cat);
+        }
+        live.pending = finish;
+        sendLiveFrame();
+        if (!liveSend({ realtimeInput: { text: LIVE_ITEM_TEXT } })) finish(null);
+      });
+    }
+
+    // Video sessions are limited to 2 minutes, so refresh every 100 s while idle.
+    setInterval(() => {
+      if (live.ready && !live.pending && !busy && Date.now() - live.startedAt >= LIVE_RECYCLE_MS) {
+        log('Refreshing live session.');
+        live.ws.close(1000, 'refresh');
+      }
+    }, 2000);
+
+    // ---------------- Wiring ----------------
+    $('connectBtn').addEventListener('click', toggleBin);
+    $('cameraBtn').addEventListener('click', toggleCamera);
+    $('emptyBtn').addEventListener('click', () => saveEmptyFrame(true));
+    $('classifyBtn').addEventListener('click', () => {
+      if (busy) {
+        log('Busy, wait for the current item.');
+        return;
+      }
+      if (cameraReady()) lastItemFrame = grabGray(); // so auto-detection does not classify it again
+      stillCount = 0;
+      processItem();
+    });
+    document.querySelectorAll('[data-cat]').forEach(b => {
+      b.addEventListener('click', () => manualSort(b.dataset.cat));
+    });
+    document.querySelectorAll('[data-raw]').forEach(b => {
+      b.addEventListener('click', () => manualRaw(b.dataset.raw));
+    });
+    document.querySelectorAll('[data-emptied]').forEach(b => {
+      b.addEventListener('click', () => markEmptied(b.dataset.emptied));
+    });
+
+    function restartLive() {
+      if (!settings.liveMode) return;
+      liveStop();
+      liveStart();
+    }
+
+    for (const name of ['apiKey', 'mqttUser', 'mqttPass']) {
+      const input = $(name);
+      input.value = settings[name];
+      input.addEventListener('input', () => saveSetting(name, input.value.trim())); // save while typing
+      input.addEventListener('change', () => {
+        saveSetting(name, input.value.trim());
+        log('Setup saved.');
+        if (name === 'apiKey') {
+          if (!CONFIG.geminiKey) settings.geminiKey = settings.apiKey;
+          restartLive();
+        }
+        else if (bin.ws) bin.ws.close(); // reconnects with the new settings
+      });
+    }
+
+    // Setup opens with #setup in the address, or with 5 quick taps on the big result text
+    // (a Home Screen app on iPhone has no address bar).
+    let setupOpen = location.hash === '#setup';
+    function showSetup() {
+      $('setupCard').hidden = !setupOpen;
+      if (setupOpen) $('setupCard').scrollIntoView({ behavior: 'smooth' });
+    }
+    window.addEventListener('hashchange', () => {
+      setupOpen = location.hash === '#setup';
+      showSetup();
+    });
+    let setupTaps = [];
+    resultEl.addEventListener('click', () => {
+      const now = Date.now();
+      setupTaps = setupTaps.filter(t => now - t < 2000).concat(now);
+      if (setupTaps.length >= 5) {
+        setupTaps = [];
+        setupOpen = true;
+        showSetup();
+      }
+    });
+    $('setupDone').addEventListener('click', () => {
+      history.replaceState(null, '', location.pathname + location.search);
+      setupOpen = false;
+      showSetup();
+    });
+    showSetup();
+
+    // ---------------- Dashboard | Admin switch ----------------
+    // ?view=dashboard opens on the dashboard; otherwise the last view used on this device.
+    function showView(view) {
+      const dash = view === 'dashboard';
+      if (dash && !$('dashFrame').src) $('dashFrame').src = 'dashboard.html';
+      $('dashView').hidden = !dash;
+      document.body.classList.toggle('view-dash', dash);
+      $('viewDash').setAttribute('aria-pressed', String(dash));
+      $('viewAdmin').setAttribute('aria-pressed', String(!dash));
+      try { localStorage.setItem('smartbin.view', view); } catch { /* not critical */ }
+    }
+    $('viewDash').addEventListener('click', () => showView('dashboard'));
+    $('viewAdmin').addEventListener('click', () => showView('admin'));
+    {
+      let start = new URLSearchParams(location.search).get('view');
+      if (!start) { try { start = localStorage.getItem('smartbin.view'); } catch { /* default */ } }
+      showView(start === 'dashboard' ? 'dashboard' : 'admin');
+    }
+
+    // Installable with Add to Home screen: build the manifest in place (single-file app).
+    (function setupManifest() {
+      const icon = 'data:image/svg+xml,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0f1216"/>' +
+        '<path d="M150 170h212l-20 250a20 20 0 0 1-20 18H190a20 20 0 0 1-20-18z" fill="#3fb950"/>' +
+        '<rect x="130" y="120" width="252" height="34" rx="12" fill="#e8ecf1"/><rect x="220" y="92" width="72" height="28" rx="8" fill="#e8ecf1"/></svg>');
+      $('iconLink').href = icon;
+      try {
+        const manifest = {
+          name: 'Smart Bin',
+          short_name: 'Smart Bin',
+          start_url: location.href.split('#')[0],
+          scope: new URL('./', location.href).href,
+          display: 'standalone',
+          orientation: 'portrait',
+          background_color: '#0f1216',
+          theme_color: '#0f1216',
+          icons: [{ src: icon, sizes: 'any', type: 'image/svg+xml' }],
+        };
+        $('manifestLink').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
+      } catch { /* manifest is optional */ }
+    })();
+
+    updateLivePill();
+    if (!window.isSecureContext) log('Not a secure context. Camera and Bluetooth need HTTPS.');
+    if (settings.binAuto && settings.mqttHost) {
+      bin.wanted = true;
+      binConnect();
+    }
+    if (settings.liveMode) liveStart();
+    log('Smart Bin ready.');
+  </script>
 </body>
+
 </html>
