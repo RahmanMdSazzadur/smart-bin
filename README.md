@@ -9,8 +9,8 @@ A phone camera above the bin's platform spots each new item. A vision AI identif
 | **Live app** | https://rahmanmdsazzadur.github.io/smart-bin/web/ |
 | **Customer dashboard** | https://rahmanmdsazzadur.github.io/smart-bin/web/dashboard.html |
 | **Demo video** | *add link* |
-| **Team** | *add team members* |
-| **Competition** | *add competition name and track* |
+| **Team** | LPR DYNAMICS |
+| **Event** | LUTES Deep Tech Hackathon 2026 |
 
 ---
 
@@ -188,11 +188,12 @@ The simulation found two bugs, which we fixed:
 
 ## Team
 
-| Name | Role |
-|---|---|
-| *add name* | *e.g. hardware and mechanics* |
-| *add name* | *e.g. Arduino programming* |
-| *add name* | *e.g. web app and AI* |
+**LPR DYNAMICS**
+
+- Denilson Fernandes
+- Shoaib Iqbal Sirazi
+- Abu Saimoom
+- Htin Lwin
 
 ## Acknowledgements
 
