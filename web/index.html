@@ -699,9 +699,9 @@
       liveMode: false,
       sensitivity: 16,                // item detection threshold; lower is more sensitive
       binCapacity: 25,                // items per compartment before it counts as full (no fill sensor)
-      // SHA-256 of 'smartbin-admin:' + PIN. Default PIN 2468. To change it, run in a terminal:
+      // SHA-256 of 'smartbin-admin:' + PIN. PIN set by the owner. To change it, run in a terminal:
       //   python3 -c "import hashlib;print(hashlib.sha256(b'smartbin-admin:1234').hexdigest())"
-      adminPinHash: 'c403c85aaf7b05e7bd369efaee110cc3f2863a847194d46b02598c3b8ad17a72',
+      adminPinHash: '10200b9d7767df4b0ffed3e7e09a264582e91d111d56f742591baf664d75307f',
       mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
       // Built in so every device works without setup. This file is public, so anyone can
       // read these. Split only to avoid automatic leak scanners, not to hide them.
