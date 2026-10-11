@@ -85,6 +85,12 @@ Models, Live mode, sensitivity and the broker host are fixed in the `CONFIG` blo
 - **Groq limit:** `photoModel` is the Groq vision model. On the free plan, Groq allows roughly 3–4 items a minute; when the limit is hit, the app waits and tries again.
 - **Live mode:** needs a Gemini API key on the setup page. Set `liveMode: true` to use a streaming Gemini Live session instead of single photos. If it gives no answer within 8 seconds, or the socket is closed, the app falls back to photo mode. Check that `liveModel` is one your key can use.
 
+## Customer dashboard
+
+`web/dashboard.html` (`https://<user>.github.io/smart-bin/web/dashboard.html`) is a read-only screen for customers, on any phone, tablet or monitor. It shows whether the bin is online, the last item, an estimated fill level and today's count for each compartment, and a message feed: items sorted, items that need emptying first, items that need manual sorting, and compartments that are almost full or full.
+
+The camera app (`index.html`) publishes this as a retained JSON message on `<topic>/state`, so a dashboard opened later still shows the latest numbers. The bin has no fill sensor, so fill levels count items: `binCapacity` in `CONFIG` (25 by default) is how many items make a compartment full. After emptying a compartment, tap its button under **Bin emptied** in the camera app.
+
 ## Test plan
 
 1. **Sketch only:** in the Serial Monitor at 9600 baud, check for `Broker connected, bin online`, then type `turn` and `spill`.

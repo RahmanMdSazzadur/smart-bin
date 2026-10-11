@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Smart Bin">
+<title>Smart Bin</title>
+<style>
+  :root {
+    --bg: #f6f5f1;
+    --card: #ffffff;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --line: #ebe9e4;
+    --track: #efede8;
+    --shadow: 0 1px 2px rgba(20, 20, 20, .04), 0 8px 24px rgba(20, 20, 20, .05);
+    --ok: #2f9e6a;
+    --warn: #d98a1c;
+    --bad: #d64545;
+    --info: #3b7dd8;
+    --energy: #e8952a;
+    --mix: #7d8591;
+    --bio: #3fa26b;
+    --metal: #3d84e0;
+    --warn-bg: #fdf3e3;
+    --bad-bg: #fbe9e9;
+    --info-bg: #e9f1fc;
+    --ok-bg: #e8f5ee;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121316;
+      --card: #1b1d21;
+      --text: #f2f2f4;
+      --muted: #9a9ca3;
+      --line: #2a2d33;
+      --track: #262930;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+      --warn-bg: #2f2414;
+      --bad-bg: #321a1b;
+      --info-bg: #17243a;
+      --ok-bg: #15291f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.45 system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  /* Header */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); display: grid; place-items: center; }
+  .brand h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+  .brand p { margin: 0; font-size: 13px; color: var(--muted); }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; background: var(--card); box-shadow: var(--shadow); padding: 8px 14px; border-radius: 999px; white-space: nowrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .status[data-state="online"] .dot { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 20%, transparent); }
+  .status[data-state="offline"] .dot { background: var(--bad); }
+  .status[data-state="connecting"] .dot { background: var(--warn); animation: pulse 1.4s infinite; }
+
+  /* Layout */
+  .grid { display: grid; gap: 16px; grid-template-columns: 1fr; grid-template-areas: "last" "messages" "bins" "today"; }
+  @media (min-width: 880px) {
+    .grid { grid-template-columns: 1.35fr 1fr; grid-template-areas: "last messages" "bins messages" "today messages"; align-items: start; }
+    .messages { position: sticky; top: 20px; }
+  }
+  .card { background: var(--card); border-radius: 22px; box-shadow: var(--shadow); padding: 20px; }
+  .label { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+
+  /* Last item */
+  .last { grid-area: last; display: flex; align-items: center; gap: 18px; min-height: 128px; }
+  .last-icon { flex: none; width: 76px; height: 76px; border-radius: 22px; display: grid; place-items: center; background: var(--track); color: var(--muted); transition: background .4s, color .4s; }
+  .last-icon svg { width: 36px; height: 36px; }
+  .last-body { min-width: 0; }
+  .last-cat { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .04em; padding: 3px 10px; border-radius: 999px; background: var(--track); color: var(--muted); }
+  .last-item { font-size: 24px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .last-time { font-size: 14px; color: var(--muted); }
+
+  /* Compartments */
+  .bins { grid-area: bins; display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  .bin { position: relative; overflow: hidden; }
+  .bin-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+  .bin-name { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+  .bin-name svg { width: 22px; height: 22px; }
+  .badge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); white-space: nowrap; }
+  .badge[data-level="almost"] { background: var(--warn-bg); color: var(--warn); }
+  .badge[data-level="full"] { background: var(--bad-bg); color: var(--bad); }
+  .bin-pct { font-size: 34px; font-weight: 750; letter-spacing: -.02em; margin: 14px 0 8px; font-variant-numeric: tabular-nums; }
+  .bin-pct small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+  .bar { height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0; border-radius: 99px; transition: width .6s ease; }
+  .bin-count { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .bin.full { outline: 2px solid var(--bad); outline-offset: -2px; animation: glow 2s ease-in-out infinite; }
+
+  /* Today */
+  .today { grid-area: today; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .today-num { font-size: 40px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .today-text { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .split { display: flex; height: 10px; width: min(260px, 45%); border-radius: 99px; overflow: hidden; background: var(--track); }
+  .split span { height: 100%; transition: width .6s ease; }
+
+  /* Messages */
+  .messages { grid-area: messages; display: flex; flex-direction: column; max-height: calc(100vh - 110px); min-height: 320px; padding: 20px 0 0; }
+  .messages .label { padding: 0 20px; }
+  .msg-list { list-style: none; margin: 0; padding: 4px 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .msg { display: flex; gap: 10px; align-items: flex-end; }
+  .msg.new { animation: rise .45s ease both; }
+  .avatar { flex: none; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--track); }
+  .avatar svg { width: 17px; height: 17px; }
+  .bubble { background: var(--bg); border-radius: 16px 16px 16px 6px; padding: 10px 14px; max-width: 100%; }
+  .bubble p { margin: 0; font-size: 15px; }
+  .bubble time { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .msg[data-type="manual"] .bubble, .msg[data-type="prepare"] .bubble, .msg[data-type="almost"] .bubble { background: var(--warn-bg); }
+  .msg[data-type="full"] .bubble { background: var(--bad-bg); }
+  .msg[data-type="info"] .bubble { background: var(--info-bg); }
+  .msg[data-type="manual"] .avatar, .msg[data-type="prepare"] .avatar, .msg[data-type="almost"] .avatar { color: var(--warn); }
+  .msg[data-type="full"] .avatar { color: var(--bad); }
+  .msg[data-type="info"] .avatar { color: var(--info); }
+  .msg[data-type="sorted"] .avatar { color: var(--ok); }
+  .empty { color: var(--muted); text-align: center; padding: 40px 16px; font-size: 15px; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @keyframes glow { 50% { outline-color: color-mix(in srgb, var(--bad) 35%, transparent); } }
+  @media (max-width: 420px) {
+    .bins { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .bin { padding: 16px; }
+    .bin-pct { font-size: 28px; }
+    .last-item { font-size: 21px; }
+    .status .text-long { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3fa26b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 3h4M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M10 12c0 2 1 3 2 3s2-1 2-3"/></svg>
+      </div>
+      <div>
+        <h1>Smart Bin</h1>
+        <p id="clock">&nbsp;</p>
+      </div>
+    </div>
+    <div id="status" class="status" data-state="connecting" role="status">
+      <span class="dot"></span><span id="statusText">Connecting<span class="text-long">…</span></span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card last" aria-label="Last item">
+      <div id="lastIcon" class="last-icon"></div>
+      <div class="last-body">
+        <span id="lastCat" class="last-cat">WAITING</span>
+        <div id="lastItem" class="last-item">No items yet</div>
+        <div id="lastTime" class="last-time">Place an item on the platform to start.</div>
+      </div>
+    </section>
+
+    <section class="bins" id="bins" aria-label="Compartments"></section>
+
+    <section class="card today" aria-label="Sorted today">
+      <div>
+        <div id="todayNum" class="today-num">0</div>
+        <div class="today-text">items sorted today</div>
+      </div>
+      <div id="split" class="split" aria-hidden="true"></div>
+    </section>
+
+    <section class="card messages" aria-label="Messages">
+      <h2 class="label">Messages from Smart Bin</h2>
+      <ol id="msgList" class="msg-list" aria-live="polite">
+        <li class="empty">No messages yet.</li>
+      </ol>
+    </section>
+  </main>
+</div>
+
+<script>
+'use strict';
+
+// Must match CONFIG in index.html and arduino_secrets.h.
+const CONFIG = {
+  mqttHost: 'broker.hivemq.com',
+  topicPrefix: 'smartbin-b0p1r0mw5c',
+};
+
+const CATS = ['ENERGY', 'MIX', 'BIO', 'METAL'];
+const NAMES = { ENERGY: 'Energy', MIX: 'Mix', BIO: 'Bio', METAL: 'Metal' };
+const COLORS = { ENERGY: 'var(--energy)', MIX: 'var(--mix)', BIO: 'var(--bio)', METAL: 'var(--metal)' };
+const ICONS = {
+  ENERGY: '<path d="M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-5 1-8.5z"/>',
+  MIX: '<path d="M12 3l8 4.5-8 4.5-8-4.5z"/><path d="M4 12l8 4.5 8-4.5"/><path d="M4 16.5l8 4.5 8-4.5"/>',
+  BIO: '<path d="M5 19c0-9 6-14 15-14 0 9-5 15-14 15"/><path d="M5 19c3-4 6-6 10-8"/>',
+  METAL: '<ellipse cx="12" cy="5" rx="6" ry="2.2"/><path d="M6 5v14c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2V5"/><path d="M6 12c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2"/>',
+};
+const MSG_ICONS = {
+  sorted: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  manual: '<path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/>',
+  prepare: '<path d="M7 4h10l-1 16H8z"/><path d="M9 9h6"/>',
+  almost: '<path d="M12 8v5M12 16.5v.5"/><path d="M10.3 3.8L2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/>',
+  full: '<path d="M12 8v5M12 16.5v.5"/><path d="M10.3 3.8L2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/>',
+  info: '<path d="M4 7h16M10 3h4M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/>',
+};
+const svg = (paths, color) =>
+  '<svg viewBox="0 0 24 24" fill="none" stroke="' + (color || 'currentColor') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+
+const $ = id => document.getElementById(id);
+let state = null;
+let online = null;
+let seenUpTo = 0; // newest message time already shown, so only new ones animate
+
+// ---------------- Rendering ----------------
+function timeAgo(t) {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 10) return 'just now';
+  if (s < 60) return s + ' s ago';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+  return new Date(t).toLocaleDateString();
+}
+function clockTime(t) {
+  return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderStatus() {
+  const el = $('status');
+  if (online === true) { el.dataset.state = 'online'; $('statusText').textContent = 'Bin online'; }
+  else if (online === false) { el.dataset.state = 'offline'; $('statusText').textContent = 'Bin offline'; }
+  else { el.dataset.state = 'connecting'; $('statusText').textContent = 'Connecting…'; }
+}
+
+function renderBins() {
+  const cap = (state && state.capacity) || 25;
+  $('bins').innerHTML = CATS.map(c => {
+    const fill = state ? state.fill[c] || 0 : 0;
+    const pct = Math.min(100, Math.round(fill / cap * 100));
+    const level = pct >= 100 ? 'full' : pct >= 80 ? 'almost' : 'ok';
+    const badge = { ok: 'OK', almost: 'Almost full', full: 'Full' }[level];
+    const today = state ? state.counts[c] || 0 : 0;
+    return '<article class="card bin' + (level === 'full' ? ' full' : '') + '">' +
+      '<div class="bin-top"><div class="bin-name">' + svg(ICONS[c], COLORS[c]) + NAMES[c] + '</div>' +
+      '<span class="badge" data-level="' + level + '">' + badge + '</span></div>' +
+      '<div class="bin-pct">' + pct + '<small>%</small></div>' +
+      '<div class="bar"><span style="width:' + pct + '%;background:' + (level === 'full' ? 'var(--bad)' : COLORS[c]) + '"></span></div>' +
+      '<div class="bin-count">' + today + ' item' + (today === 1 ? '' : 's') + ' today</div>' +
+      '</article>';
+  }).join('');
+}
+
+function renderToday() {
+  const counts = state ? state.counts : {};
+  const total = CATS.reduce((sum, c) => sum + (counts[c] || 0), 0);
+  $('todayNum').textContent = total;
+  $('split').innerHTML = total ? CATS.map(c =>
+    '<span style="width:' + ((counts[c] || 0) / total * 100) + '%;background:' + COLORS[c] + '"></span>').join('') : '';
+}
+
+function renderLast() {
+  const last = state && state.last;
+  if (!last) return;
+  const c = last.category;
+  $('lastIcon').innerHTML = svg(ICONS[c] || '', '#fff');
+  $('lastIcon').style.background = COLORS[c] || 'var(--track)';
+  $('lastCat').textContent = (NAMES[c] || c).toUpperCase();
+  $('lastCat').style.background = 'color-mix(in srgb, ' + (COLORS[c] || 'var(--muted)') + ' 15%, transparent)';
+  $('lastCat').style.color = COLORS[c] || 'var(--muted)';
+  const item = last.item || 'Item';
+  $('lastItem').textContent = item.charAt(0).toUpperCase() + item.slice(1);
+  $('lastTime').textContent = 'Sorted ' + timeAgo(last.at);
+}
+
+function renderMessages() {
+  const list = $('msgList');
+  const messages = (state && state.messages) || [];
+  if (!messages.length) {
+    list.innerHTML = '<li class="empty">No messages yet.</li>';
+    return;
+  }
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+  list.innerHTML = '';
+  for (const m of messages) {
+    const li = document.createElement('li');
+    li.className = 'msg' + (m.at > seenUpTo && seenUpTo ? ' new' : '');
+    li.dataset.type = m.type;
+    li.innerHTML = '<div class="avatar">' + svg(MSG_ICONS[m.type] || MSG_ICONS.info) + '</div>' +
+      '<div class="bubble"><p></p><time></time></div>';
+    li.querySelector('p').textContent = m.text;
+    li.querySelector('time').textContent = clockTime(m.at) + ' · ' + timeAgo(m.at);
+    list.append(li);
+  }
+  seenUpTo = Math.max(seenUpTo, ...messages.map(m => m.at), 1);
+  if (nearBottom || list.dataset.first !== 'done') {
+    list.scrollTop = list.scrollHeight;
+    list.dataset.first = 'done';
+  }
+}
+
+function renderAll() {
+  renderStatus();
+  renderBins();
+  renderToday();
+  renderLast();
+  renderMessages();
+}
+
+function tick() {
+  const narrow = window.innerWidth < 480;
+  $('clock').textContent = new Date().toLocaleDateString([], narrow
+    ? { weekday: 'short', day: 'numeric', month: 'short' }
+    : { weekday: 'long', day: 'numeric', month: 'long' }) +
+    ' · ' + clockTime(Date.now());
+  if (state) {
+    renderLast();
+    document.querySelectorAll('#msgList .msg time').forEach((el, i) => {
+      const m = state.messages[i];
+      if (m) el.textContent = clockTime(m.at) + ' · ' + timeAgo(m.at);
+    });
+  }
+}
+
+// ---------------- MQTT over WebSocket (read only) ----------------
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const topic = name => CONFIG.topicPrefix + '/' + name;
+let ws = null;
+let buf = new Uint8Array(0);
+let pingTimer = null;
+
+function mqttString(str) {
+  const b = encoder.encode(str);
+  return [b.length >> 8, b.length & 255, ...b];
+}
+function mqttPacket(first, body) {
+  const len = [];
+  let n = body.length;
+  do {
+    let digit = n % 128;
+    n = Math.floor(n / 128);
+    if (n > 0) digit |= 128;
+    len.push(digit);
+  } while (n > 0);
+  return new Uint8Array([first, ...len, ...body]);
+}
+
+function connect() {
+  const url = /^wss?:\/\//.test(CONFIG.mqttHost) ? CONFIG.mqttHost : 'wss://' + CONFIG.mqttHost + ':8884/mqtt';
+  const sock = new WebSocket(url, 'mqtt');
+  sock.binaryType = 'arraybuffer';
+  ws = sock;
+  buf = new Uint8Array(0);
+  sock.onopen = () => {
+    const id = 'smartbin-dash-' + Math.random().toString(16).slice(2, 8);
+    sock.send(mqttPacket(0x10, [...mqttString('MQTT'), 4, 0x02, 0, 60, ...mqttString(id)]));
+  };
+  sock.onmessage = ev => { if (sock === ws) onData(new Uint8Array(ev.data)); };
+  sock.onclose = () => {
+    if (sock !== ws) return;
+    ws = null;
+    clearInterval(pingTimer);
+    online = null;
+    renderStatus();
+    setTimeout(connect, 3000);
+  };
+}
+
+function onData(chunk) {
+  const data = new Uint8Array(buf.length + chunk.length);
+  data.set(buf);
+  data.set(chunk, buf.length);
+  let pos = 0;
+  while (data.length - pos >= 2) {
+    let len = 0, mult = 1, i = pos + 1, byte, complete = true;
+    do {
+      if (i >= data.length) { complete = false; break; }
+      byte = data[i++];
+      len += (byte & 127) * mult;
+      mult *= 128;
+    } while (byte & 128);
+    if (!complete || i + len > data.length) break;
+    onPacket(data[pos], data.subarray(i, i + len));
+    pos = i + len;
+  }
+  buf = data.slice(pos);
+}
+
+function onPacket(first, body) {
+  const type = first >> 4;
+  if (type === 2 && body[1] === 0) { // CONNACK
+    ws.send(mqttPacket(0x82, [0, 1, ...mqttString(topic('state')), 0, ...mqttString(topic('online')), 0]));
+    clearInterval(pingTimer);
+    pingTimer = setInterval(() => { if (ws && ws.readyState === 1) ws.send(new Uint8Array([0xc0, 0])); }, 30000);
+  } else if (type === 3) { // PUBLISH
+    const qos = (first >> 1) & 3;
+    const tl = (body[0] << 8) | body[1];
+    const name = decoder.decode(body.subarray(2, 2 + tl));
+    const payload = decoder.decode(body.subarray(2 + tl + (qos ? 2 : 0)));
+    if (name === topic('online')) {
+      online = payload.trim() === 'ONLINE';
+      renderStatus();
+    } else if (name === topic('state')) {
+      try {
+        state = JSON.parse(payload);
+        renderAll();
+      } catch { /* ignore a broken update */ }
+    }
+  }
+}
+
+renderAll();
+tick();
+setInterval(tick, 15000);
+connect();
+</script>
+</body>
+</html>
