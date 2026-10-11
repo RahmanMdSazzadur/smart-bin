@@ -8,7 +8,8 @@ A phone camera above the bin's platform spots each new item. A vision AI identif
 |---|---|
 | **Live app** | https://rahmanmdsazzadur.github.io/smart-bin/web/ |
 | **Customer dashboard** | https://rahmanmdsazzadur.github.io/smart-bin/web/dashboard.html |
-| **Demo video** | *add link* |
+| **Demo video** | [submission/demo-video.mp4](submission/demo-video.mp4) · [Google Drive](https://drive.google.com/file/d/1eL3hZEr2-LJMiY8Sw7f0AMWgQFhSsGXp/view?usp=sharing) |
+| **Pitch deck** | [submission/pitch-deck.pdf](submission/pitch-deck.pdf) · [Google Drive](https://drive.google.com/file/d/1XFOPu7cMR98BJfQHbd0KJuJy4U8VFfaI/view?usp=sharing) |
 | **Team** | LPR DYNAMICS |
 | **Event** | LUTES Deep Tech Hackathon 2026 |
 
@@ -123,6 +124,7 @@ arduino/smart_bin/smart_bin.ino      The team's original, tested motor sketch (U
 arduino/smart_bin_wifi/              Wi-Fi version: original motor code + MQTT
 .githooks/pre-commit                 Stamps the version number on every commit
 docs/SETUP.md                        Full setup guide
+submission/                          Pitch deck and demo video
 docs/images/                         Screenshots
 ```
 
