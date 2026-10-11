@@ -689,6 +689,9 @@
     const LIVE_PROMPT = PROMPT + ' You are watching a live camera above the platform. Stay silent. Only when you are told an item has been placed, call the sort_item function once with the category. Never answer in speech.';
     const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
 
+    // Set automatically on every commit by .githooks/pre-commit; must match web/version.json.
+    const APP_VERSION = '20261011094100';
+
     // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
     const CONFIG = {
       // Tried in this order for every photo. Each model has its own free daily allowance;
@@ -1993,7 +1996,7 @@
         return;
       }
       const dash = view === 'dashboard';
-      if (dash && !$('dashFrame').src) $('dashFrame').src = 'dashboard.html';
+      if (dash && !$('dashFrame').src) $('dashFrame').src = 'dashboard.html?v=' + APP_VERSION;
       $('dashView').hidden = !dash;
       document.body.classList.toggle('view-dash', dash);
       $('viewDash').setAttribute('aria-pressed', String(dash));
@@ -2007,6 +2010,58 @@
       if (!start) { try { start = localStorage.getItem('smartbin.view'); } catch { /* default */ } }
       showView(start === 'dashboard' || !adminUnlocked ? 'dashboard' : 'admin');
     }
+
+    // ---------------- Automatic update ----------------
+    // GitHub Pages lets phones keep an old copy for a while. The app compares its own
+    // APP_VERSION with web/version.json (never cached) and reloads itself when a newer
+    // version is published, but never in the middle of classifying or sorting.
+    let updatePending = null;
+
+    async function checkForUpdate() {
+      if (APP_VERSION === 'dev' || updatePending) return;
+      try {
+        const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const { version } = await res.json();
+        if (!version || version === APP_VERSION) return;
+        let tried = null;
+        try { tried = sessionStorage.getItem('smartbin.updateTried'); } catch { /* first try */ }
+        if (tried === version) return; // already reloaded for this version once; avoid a loop
+        updatePending = version;
+        applyUpdate();
+      } catch { /* offline: try again later */ }
+    }
+
+    function applyUpdate() {
+      if (busy) {
+        setTimeout(applyUpdate, 3000);
+        return;
+      }
+      try {
+        sessionStorage.setItem('smartbin.updateTried', updatePending);
+        sessionStorage.setItem('smartbin.cameraWasOn', stream ? '1' : '');
+      } catch { /* not critical */ }
+      log('New version found, updating…');
+      const url = new URL(location.href);
+      url.searchParams.set('u', updatePending); // a new address skips the old cached copy
+      url.hash = '';
+      location.replace(url.toString());
+    }
+
+    // After an automatic update, turn the camera back on if it was running.
+    try {
+      if (sessionStorage.getItem('smartbin.cameraWasOn') === '1') {
+        sessionStorage.removeItem('smartbin.cameraWasOn');
+        log('Updated to the latest version. Restarting the camera…');
+        setTimeout(() => { if (!stream) toggleCamera(); }, 800);
+      }
+    } catch { /* not critical */ }
+
+    checkForUpdate();
+    setInterval(checkForUpdate, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate();
+    });
 
     // Installable with Add to Home screen: build the manifest in place (single-file app).
     (function setupManifest() {

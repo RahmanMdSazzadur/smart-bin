@@ -91,6 +91,16 @@ Models, Live mode, sensitivity and the broker host are fixed in the `CONFIG` blo
 
 The camera app (`index.html`) publishes this as a retained JSON message on `<topic>/state`, so a dashboard opened later still shows the latest numbers. The bin has no fill sensor, so fill levels count items: `binCapacity` in `CONFIG` (25 by default) is how many items make a compartment full. After emptying a compartment, tap its button under **Bin emptied** in the camera app.
 
+## Automatic updates
+
+Phones can keep an old copy of the app for a while. Each page has an `APP_VERSION`, and `web/version.json` holds the latest one. The app checks `version.json` when it opens, when it comes back to the screen, and every 5 minutes; when GitHub has a newer version it reloads itself (never in the middle of a sort, and it restarts the camera if it was running).
+
+The version is stamped automatically by `.githooks/pre-commit` whenever files in `web/` are committed. Turn the hook on once in each copy of the repository:
+
+```
+git config core.hooksPath .githooks
+```
+
 ## Test plan
 
 1. **Sketch only:** in the Serial Monitor at 9600 baud, check for `Broker connected, bin online`, then type `turn` and `spill`.

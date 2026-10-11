@@ -1,0 +1,13 @@
+#!/bin/sh
+# Stamps a new version into the web app whenever web files are committed, so phones
+# notice the update and reload themselves (see checkForUpdate in web/index.html).
+# Turn on once per clone with:  git config core.hooksPath .githooks
+cd "$(git rev-parse --show-toplevel)" || exit 0
+git diff --cached --name-only | grep -q '^web/' || exit 0
+
+V=$(date -u +%Y%m%d%H%M%S)
+for f in web/index.html web/dashboard.html; do
+  sed -i.bak "s/const APP_VERSION = '[^']*';/const APP_VERSION = '$V';/" "$f" && rm -f "$f.bak"
+done
+printf '{ "version": "%s" }\n' "$V" > web/version.json
+git add web/index.html web/dashboard.html web/version.json

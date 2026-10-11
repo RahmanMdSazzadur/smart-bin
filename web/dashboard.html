@@ -189,6 +189,9 @@
 <script>
 'use strict';
 
+// Set automatically on every commit by .githooks/pre-commit; must match web/version.json.
+const APP_VERSION = '20261011094100';
+
 // Must match CONFIG in index.html and arduino_secrets.h.
 const CONFIG = {
   mqttHost: 'broker.hivemq.com',
@@ -417,10 +420,33 @@ function onPacket(first, body) {
   }
 }
 
+// ---------------- Automatic update ----------------
+// When opened on its own (not inside the app, which updates itself), reload when a
+// newer version is published on GitHub Pages.
+async function checkForUpdate() {
+  if (APP_VERSION === 'dev' || window.top !== window) return;
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const { version } = await res.json();
+    if (!version || version === APP_VERSION) return;
+    if (sessionStorage.getItem('smartbin.dashUpdateTried') === version) return; // avoid a loop
+    sessionStorage.setItem('smartbin.dashUpdateTried', version);
+    const url = new URL(location.href);
+    url.searchParams.set('u', version);
+    location.replace(url.toString());
+  } catch { /* offline: try again later */ }
+}
+
 renderAll();
 tick();
 setInterval(tick, 15000);
 connect();
+checkForUpdate();
+setInterval(checkForUpdate, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdate();
+});
 </script>
 </body>
 </html>
