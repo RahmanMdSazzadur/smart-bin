@@ -173,6 +173,10 @@
       color: var(--muted);
     }
 
+    .placeholder[hidden] {
+      display: none;
+    }
+
     .result {
       font-size: 52px;
       font-weight: 800;
@@ -690,7 +694,7 @@
     const LIVE_ITEM_TEXT = 'An item has just been placed on the platform and is still. Call sort_item now.';
 
     // Set automatically on every commit by .githooks/pre-commit; must match web/version.json.
-    const APP_VERSION = '20261011094527';
+    const APP_VERSION = '20261011095608';
 
     // Fixed settings. Nobody can change these from the page; edit them here and push to GitHub.
     const CONFIG = {
@@ -700,7 +704,7 @@
       photoModel: 'qwen/qwen3.8-27b',   // Groq backup, used when every Gemini model is out of quota or fails
       liveModel: 'gemini-3.8-live',     // Live mode only (off), uses the Gemini key
       liveMode: false,
-      sensitivity: 16,                // item detection threshold; lower is more sensitive
+      sensitivity: 2,                 // % of the picture that must change to count as an item; lower is more sensitive
       binCapacity: 25,                // items per compartment before it counts as full (no fill sensor)
       // SHA-256 of 'smartbin-admin:' + PIN. PIN set by the owner. To change it, run in a terminal:
       //   python3 -c "import hashlib;print(hashlib.sha256(b'smartbin-admin:1234').hexdigest())"
@@ -1277,6 +1281,15 @@
       return sum / a.length;
     }
 
+    // Percent of the picture that changed clearly. A small item is still a few percent,
+    // while a slow lighting change (every pixel a little different) stays near 0.
+    const PIXEL_CHANGE = 25; // grey levels (0–255) a pixel must change by to count
+    function changedPercent(a, b) {
+      let n = 0;
+      for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > PIXEL_CHANGE) n++;
+      return n / a.length * 100;
+    }
+
     function saveEmptyFrame(manual) {
       if (!cameraReady()) {
         log('Start the camera first.');
@@ -1313,9 +1326,9 @@
       }
 
       const sens = settings.sensitivity;
-      const dEmpty = meanAbsDiff(g, emptyFrame);
-      const dItem = lastItemFrame ? meanAbsDiff(g, lastItemFrame) : Infinity;
-      const numbers = 'change ' + dEmpty.toFixed(1) + ' / ' + sens + ' · motion ' + dPrev.toFixed(1);
+      const dEmpty = changedPercent(g, emptyFrame);
+      const dItem = lastItemFrame ? changedPercent(g, lastItemFrame) : Infinity;
+      const numbers = 'change ' + dEmpty.toFixed(1) + '% / ' + sens + '% · motion ' + dPrev.toFixed(1);
 
       // Follow slow lighting changes while the platform looks empty.
       if (still && dEmpty < sens * 0.5) {
