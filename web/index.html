@@ -570,7 +570,7 @@
       mqttHost: 'broker.hivemq.com',  // host name, or a full wss:// address
       // Built in so every device works without setup. This file is public, so anyone can
       // read these. Split only to avoid automatic leak scanners, not to hide them.
-      geminiKey: 'AQ.Ab8RN6LQgIdpVNoaWwGlkqweR3jVnlX7EK4QSZGRsbIdgCIZ6A',   // paste your Gemini key between the quotes; empty = Groq only
+      geminiKey: '',   // never put a Gemini key here (Google deletes public keys); add it per device on the setup page
       groqKey: ['gsk_', 'KHWd6JHrX1I4pPux', 'qnkyWGdyb3FYKz5c', '69enHmI3Gg0QGrzsXxys'].join(''),
       topicPrefix: 'smartbin-b0p1r0mw5c', // must match SECRET_TOPIC_PREFIX in arduino_secrets.h
     };
